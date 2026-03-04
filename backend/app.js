@@ -19,8 +19,7 @@ const { getPublicIp } = require('./utils/network');
 // Initialize Queue Workers
 require('./queues/emailQueue');
 
-// Middleware
-app.use(cors());
+// Middleware (We apply admin options globally except where overridden via dynamic handling)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -79,15 +78,30 @@ const schemaRoute = require('./routes/schemas');
 const releaseRoute = require('./routes/releases');
 
 // ROUTES SETUP 
-app.use('/api/auth/login', authLimiter);           // Strict limiter on login
-app.use('/api/auth/register', authLimiter);        // Strict limiter on register
-app.use('/api/auth', dashboardLimiter, authRoute); // Developer Auth (general)
-app.use('/api/projects', dashboardLimiter, projectRoute); // Project Mgmt
-app.use('/api/userAuth', limiter, logger, userAuthRoute);
-app.use('/api/data', limiter, cors(adminCorsOptions), logger, dataRoute);
-app.use('/api/schemas', limiter, cors(adminCorsOptions), logger, schemaRoute);
-app.use('/api/storage', limiter, cors(adminCorsOptions), logger, storageRoute);
-app.use('/api/releases', releaseRoute);
+app.use('/api/auth/login', cors(adminCorsOptions), authLimiter);           // Strict limiter on login
+app.use('/api/auth/register', cors(adminCorsOptions), authLimiter);        // Strict limiter on register
+app.use('/api/auth', cors(adminCorsOptions), dashboardLimiter, authRoute); // Developer Auth (general)
+app.use('/api/projects', cors(adminCorsOptions), dashboardLimiter, projectRoute); // Project Mgmt
+app.use('/api/userAuth', cors(adminCorsOptions), limiter, logger, userAuthRoute);
+app.use('/api/releases', cors(adminCorsOptions), releaseRoute);
+
+// For project-specific routes, we handle CORS dynamically inside `verifyApiKey.js` 
+// and a custom pre-flight middleware to allow varying allowedDomains.
+const projectCorsPreflight = (req, res, next) => {
+    // Basic catch-all for OPTIONS requests so the browser doesn't get blocked
+    // verifyApiKey handles the actual domain verification for GET/POST/PUT/DELETE
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-api-key");
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+    next();
+};
+
+app.use('/api/data', projectCorsPreflight, limiter, logger, dataRoute);
+app.use('/api/schemas', projectCorsPreflight, limiter, logger, schemaRoute);
+app.use('/api/storage', projectCorsPreflight, limiter, logger, storageRoute);
 
 app.get('/api/server-ip', async (req, res) => {
     const ip = await getPublicIp();
