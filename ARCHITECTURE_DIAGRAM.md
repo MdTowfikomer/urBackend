@@ -191,9 +191,9 @@ erDiagram
     }
 
     OTP {
-        string email
+        ObjectId userId
         string otp
-        date expiresAt
+        date createdAt
     }
 
     Log {
