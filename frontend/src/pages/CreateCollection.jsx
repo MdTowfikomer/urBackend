@@ -3,8 +3,314 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react';
 import { API_URL } from '../config';
+
+const MAX_DEPTH = 3;
+
+// Generate a stable unique ID for React keys
+let _fieldIdCounter = 0;
+const nextFieldId = () => `field_${Date.now()}_${_fieldIdCounter++}`;
+
+const PRIMITIVE_TYPES = ['String', 'Number', 'Boolean', 'Date'];
+const ALL_TYPES = [...PRIMITIVE_TYPES, 'Object', 'Array', 'Ref'];
+const ARRAY_ITEM_TYPES = [...PRIMITIVE_TYPES, 'Object', 'Ref'];
+
+function createEmptyField() {
+    return { _id: nextFieldId(), key: '', type: 'String', required: false };
+}
+
+// Recursive FieldRow component
+function FieldRow({ field, index, depth, collections, onChange, onRemove }) {
+    const [expanded, setExpanded] = useState(true);
+
+    const handleChange = (prop, value) => {
+        const updated = { ...field, [prop]: value };
+
+        // Reset sub-properties when type changes
+        if (prop === 'type') {
+            delete updated.fields;
+            delete updated.items;
+            delete updated.ref;
+            if (value === 'Object') {
+                updated.fields = [createEmptyField()];
+            } else if (value === 'Array') {
+                updated.items = { type: 'String' };
+            } else if (value === 'Ref') {
+                updated.ref = '';
+            }
+        }
+        onChange(index, updated);
+    };
+
+    const handleSubFieldChange = (subIndex, updatedSubField) => {
+        const newFields = [...(field.fields || [])];
+        newFields[subIndex] = updatedSubField;
+        onChange(index, { ...field, fields: newFields });
+    };
+
+    const addSubField = () => {
+        const newFields = [...(field.fields || []), createEmptyField()];
+        onChange(index, { ...field, fields: newFields });
+    };
+
+    const removeSubField = (subIndex) => {
+        const newFields = (field.fields || []).filter((_, i) => i !== subIndex);
+        onChange(index, { ...field, fields: newFields });
+    };
+
+    // Array items sub-field handlers
+    const handleItemsChange = (prop, value) => {
+        const updatedItems = { ...field.items, [prop]: value };
+        if (prop === 'type') {
+            delete updatedItems.fields;
+            if (value === 'Object') {
+                updatedItems.fields = [createEmptyField()];
+            }
+        }
+        onChange(index, { ...field, items: updatedItems });
+    };
+
+    const handleItemSubFieldChange = (subIndex, updatedSubField) => {
+        const newFields = [...(field.items?.fields || [])];
+        newFields[subIndex] = updatedSubField;
+        onChange(index, { ...field, items: { ...field.items, fields: newFields } });
+    };
+
+    const addItemSubField = () => {
+        const newFields = [...(field.items?.fields || []), createEmptyField()];
+        onChange(index, { ...field, items: { ...field.items, fields: newFields } });
+    };
+
+    const removeItemSubField = (subIndex) => {
+        const newFields = (field.items?.fields || []).filter((_, i) => i !== subIndex);
+        onChange(index, { ...field, items: { ...field.items, fields: newFields } });
+    };
+
+    const availableTypes = depth >= MAX_DEPTH
+        ? PRIMITIVE_TYPES.concat(['Ref'])  // No Object/Array at max depth
+        : ALL_TYPES;
+
+    const availableItemTypes = depth >= MAX_DEPTH
+        ? PRIMITIVE_TYPES.concat(['Ref'])
+        : ARRAY_ITEM_TYPES;
+
+    const isComplex = field.type === 'Object' || field.type === 'Array' || field.type === 'Ref';
+    const indent = depth * 20;
+
+    return (
+        <div style={{ marginLeft: `${indent}px` }}>
+            {/* Main field row */}
+            <div className="schema-field-row" style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 12px', marginBottom: '4px',
+                background: depth > 1 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                borderRadius: '6px',
+                borderLeft: depth > 1 ? '2px solid rgba(62, 207, 142, 0.2)' : 'none'
+            }}>
+                {/* Expand toggle for complex types */}
+                {isComplex && field.type !== 'Ref' ? (
+                    <button
+                        type="button"
+                        onClick={() => setExpanded(!expanded)}
+                        className="btn-icon"
+                        style={{ padding: '2px', color: 'var(--color-text-muted)', flexShrink: 0 }}
+                    >
+                        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </button>
+                ) : (
+                    <div style={{ width: '18px', flexShrink: 0 }} />
+                )}
+
+                {/* Key name */}
+                <input
+                    type="text"
+                    placeholder="field_name"
+                    value={field.key}
+                    onChange={(e) => handleChange('key', e.target.value)}
+                    className="input-field"
+                    style={{
+                        flex: 2, border: 'none', background: 'transparent',
+                        padding: '4px 0', fontSize: '0.9rem'
+                    }}
+                />
+
+                {/* Type selector */}
+                <select
+                    value={field.type}
+                    onChange={(e) => handleChange('type', e.target.value)}
+                    className="input-field"
+                    style={{
+                        flex: 1, border: 'none', background: 'transparent',
+                        padding: '4px 0', cursor: 'pointer', fontSize: '0.9rem'
+                    }}
+                >
+                    {availableTypes.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                    ))}
+                </select>
+
+                {/* Required checkbox */}
+                <input
+                    type="checkbox"
+                    checked={field.required}
+                    onChange={(e) => handleChange('required', e.target.checked)}
+                    style={{
+                        accentColor: 'var(--color-primary)',
+                        transform: 'scale(1.1)', cursor: 'pointer', flexShrink: 0
+                    }}
+                />
+
+                {/* Delete button */}
+                <button
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    className="btn btn-ghost"
+                    style={{ color: 'var(--color-text-muted)', padding: '4px', flexShrink: 0 }}
+                >
+                    <Trash2 size={15} />
+                </button>
+            </div>
+
+            {/* Ref — collection picker */}
+            {field.type === 'Ref' && (
+                <div style={{ marginLeft: '26px', marginBottom: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                        → References:
+                    </span>
+                    <select
+                        value={field.ref || ''}
+                        onChange={(e) => handleChange('ref', e.target.value)}
+                        className="input-field"
+                        style={{ flex: 1, fontSize: '0.85rem', padding: '4px 8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                    >
+                        <option value="">Select collection...</option>
+                        {collections.map(c => (
+                            <option key={c.name} value={c.name}>{c.name}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
+            {/* Object — nested sub-fields */}
+            {field.type === 'Object' && expanded && (
+                <div style={{ marginLeft: '8px', marginBottom: '8px' }}>
+                    <div style={{
+                        padding: '8px', borderRadius: '6px',
+                        border: '1px solid rgba(62, 207, 142, 0.1)',
+                        background: 'rgba(0,0,0,0.15)'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-muted)', letterSpacing: '0.05em' }}>
+                                SUB-FIELDS
+                            </span>
+                            {depth < MAX_DEPTH && (
+                                <button type="button" onClick={addSubField} className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '2px 6px' }}>
+                                    <Plus size={12} /> Add
+                                </button>
+                            )}
+                        </div>
+                        {(field.fields || []).map((subField, subIdx) => (
+                            <FieldRow
+                                key={subField._id}
+                                field={subField}
+                                index={subIdx}
+                                depth={depth + 1}
+                                collections={collections}
+                                onChange={handleSubFieldChange}
+                                onRemove={removeSubField}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Array — item type config */}
+            {field.type === 'Array' && expanded && (
+                <div style={{ marginLeft: '8px', marginBottom: '8px' }}>
+                    <div style={{
+                        padding: '8px', borderRadius: '6px',
+                        border: '1px solid rgba(62, 207, 142, 0.1)',
+                        background: 'rgba(0,0,0,0.15)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-muted)', letterSpacing: '0.05em' }}>
+                                ITEMS TYPE
+                            </span>
+                            <select
+                                value={field.items?.type || 'String'}
+                                onChange={(e) => handleItemsChange('type', e.target.value)}
+                                className="input-field"
+                                style={{ flex: 1, fontSize: '0.85rem', padding: '4px 8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                            >
+                                {availableItemTypes.map(t => (
+                                    <option key={t} value={t}>{t}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Array of Objects — sub-fields */}
+                        {field.items?.type === 'Object' && (
+                            <div style={{ marginTop: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Object Fields</span>
+                                    {depth < MAX_DEPTH && (
+                                        <button type="button" onClick={addItemSubField} className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '2px 6px' }}>
+                                            <Plus size={12} /> Add
+                                        </button>
+                                    )}
+                                </div>
+                                {(field.items?.fields || []).map((subField, subIdx) => (
+                                    <FieldRow
+                                        key={subField._id}
+                                        field={subField}
+                                        index={subIdx}
+                                        depth={depth + 1}
+                                        collections={collections}
+                                        onChange={handleItemSubFieldChange}
+                                        onRemove={removeItemSubField}
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Array of Ref — collection picker */}
+                        {field.items?.type === 'Ref' && (
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                                    → References:
+                                </span>
+                                <select
+                                    value={field.items?.ref || ''}
+                                    onChange={(e) => handleItemsChange('ref', e.target.value)}
+                                    className="input-field"
+                                    style={{ flex: 1, fontSize: '0.85rem', padding: '4px 8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                                >
+                                    <option value="">Select collection...</option>
+                                    {collections.map(c => (
+                                        <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// Strip internal _id fields before sending to API
+function cleanFieldsForApi(fields) {
+    return fields.map(f => {
+        const { _id, ...clean } = f;
+        if (clean.fields) clean.fields = cleanFieldsForApi(clean.fields);
+        if (clean.items?.fields) {
+            clean.items = { ...clean.items, fields: cleanFieldsForApi(clean.items.fields) };
+        }
+        return clean;
+    });
+}
 
 
 function CreateCollection() {
@@ -14,14 +320,28 @@ function CreateCollection() {
 
     const [name, setName] = useState('');
     const [fields, setFields] = useState([
-        { key: 'username', type: 'String', required: true },
-        { key: 'email', type: 'String', required: true },
-        { key: 'password', type: 'String', required: true },
+        { ...createEmptyField(), key: 'username', type: 'String', required: true },
+        { ...createEmptyField(), key: 'email', type: 'String', required: true },
+        { ...createEmptyField(), key: 'password', type: 'String', required: true },
     ]);
     const [loading, setLoading] = useState(false);
+    const [collections, setCollections] = useState([]);
+
+    // Fetch existing collections for Ref picker
+    useState(() => {
+        const fetchCollections = async () => {
+            try {
+                const res = await axios.get(`${API_URL}/api/projects/${projectId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setCollections(res.data.collections || []);
+            } catch { /* ignore */ }
+        };
+        fetchCollections();
+    }, []);
 
     const addField = () => {
-        setFields([...fields, { key: '', type: 'String', required: false }]);
+        setFields([...fields, createEmptyField()]);
     };
 
     const removeField = (index) => {
@@ -29,9 +349,9 @@ function CreateCollection() {
         setFields(newFields);
     };
 
-    const handleFieldChange = (index, prop, value) => {
+    const handleFieldChange = (index, updatedField) => {
         const newFields = [...fields];
-        newFields[index][prop] = value;
+        newFields[index] = updatedField;
         setFields(newFields);
     };
 
@@ -51,22 +371,23 @@ function CreateCollection() {
             await axios.post(`${API_URL}/api/projects/collection`, {
                 projectId,
                 collectionName: name,
-                schema: fields
+                schema: cleanFieldsForApi(fields)
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             toast.success("Collection Created!");
-            navigate(`/project/${projectId}/database`); // Redirect to Database tab
+            navigate(`/project/${projectId}/database`);
         } catch (err) {
-            toast.error(err.response?.data || "Failed to create collection");
+            const errMsg = err.response?.data?.error;
+            toast.error(typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg) || "Failed to create collection");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="container" style={{ maxWidth: '800px' }}>
+        <div className="container" style={{ maxWidth: '900px' }}>
             <button
                 onClick={() => navigate(`/project/${projectId}`)}
                 className="btn btn-ghost"
@@ -106,68 +427,41 @@ function CreateCollection() {
                         </button>
                     </div>
 
-                    <div className="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th style={{ width: '40%' }}>Name</th>
-                                    <th style={{ width: '30%' }}>Type</th>
-                                    <th style={{ width: '15%', textAlign: 'center' }}>Required</th>
-                                    <th style={{ width: '15%' }}></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {fields.map((field, index) => (
-                                    <tr key={index}>
-                                        <td style={{ padding: '8px 16px' }}>
-                                            <input
-                                                type="text"
-                                                placeholder="column_name"
-                                                value={field.key}
-                                                onChange={(e) => handleFieldChange(index, 'key', e.target.value)}
-                                                className="input-field"
-                                                style={{ border: 'none', background: 'transparent', padding: '0' }}
-                                            />
-                                        </td>
-                                        <td style={{ padding: '8px 16px' }}>
-                                            <select
-                                                value={field.type}
-                                                onChange={(e) => handleFieldChange(index, 'type', e.target.value)}
-                                                className="input-field"
-                                                style={{ border: 'none', background: 'transparent', padding: '0', cursor: 'pointer' }}
-                                            >
-                                                <option value="String">String</option>
-                                                <option value="Number">Number</option>
-                                                <option value="Boolean">Boolean</option>
-                                                <option value="Date">Date</option>
-                                            </select>
-                                        </td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={field.required}
-                                                onChange={(e) => handleFieldChange(index, 'required', e.target.checked)}
-                                                style={{ accentColor: 'var(--color-primary)', transform: 'scale(1.2)', cursor: 'pointer' }}
-                                            />
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => removeField(index)}
-                                                className="btn btn-ghost"
-                                                style={{ color: 'var(--color-text-muted)', padding: '4px' }}
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    {/* Column header */}
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '6px 12px 6px 38px', marginBottom: '4px',
+                        fontSize: '0.75rem', fontWeight: 600,
+                        color: 'var(--color-text-muted)', letterSpacing: '0.05em'
+                    }}>
+                        <span style={{ flex: 2 }}>NAME</span>
+                        <span style={{ flex: 1 }}>TYPE</span>
+                        <span style={{ width: '24px', textAlign: 'center' }}>REQ</span>
+                        <span style={{ width: '30px' }}></span>
+                    </div>
+
+                    <div style={{
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        background: 'rgba(0,0,0,0.1)'
+                    }}>
+                        {fields.map((field, index) => (
+                            <FieldRow
+                                key={field._id}
+                                field={field}
+                                index={index}
+                                depth={1}
+                                collections={collections}
+                                onChange={handleFieldChange}
+                                onRemove={removeField}
+                            />
+                        ))}
                     </div>
 
                     <div style={{ marginTop: '10px', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
                         Tip: We automatically add a unique <code>_id</code> field to every document.
+                        {' '}Use <strong>Object</strong> for nested data, <strong>Array</strong> for lists, and <strong>Ref</strong> to link collections.
                     </div>
                 </div>
 

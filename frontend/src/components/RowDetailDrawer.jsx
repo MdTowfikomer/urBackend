@@ -1,5 +1,72 @@
-import React, { useEffect } from "react";
-import { X, FileText, Edit2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { X, FileText, Edit2, ChevronDown, ChevronRight } from "lucide-react";
+
+// Premium JSON tree viewer for better DX when viewing nested data
+const JsonViewer = ({ data, level = 0 }) => {
+  const [expanded, setExpanded] = useState(true);
+
+  if (data === null) return <span style={{ color: '#ef4444' }}>null</span>;
+  if (data === undefined) return <span style={{ color: '#888' }}>undefined</span>;
+  if (typeof data === 'boolean') return <span style={{ color: '#eab308' }}>{String(data)}</span>;
+  if (typeof data === 'number') return <span style={{ color: '#3b82f6' }}>{data}</span>;
+  if (typeof data === 'string') return <span style={{ color: '#3ecf8e', wordBreak: 'break-all' }}>"{data}"</span>;
+
+  if (Array.isArray(data)) {
+    if (data.length === 0) return <span style={{ color: '#888' }}>[]</span>;
+    return (
+      <div style={{ marginLeft: level > 0 ? '12px' : '0' }}>
+        <span 
+          onClick={() => setExpanded(!expanded)} 
+          style={{ cursor: 'pointer', color: '#888', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+        >
+          {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />} Array({data.length}) [
+        </span>
+        {expanded && (
+          <div style={{ marginLeft: '12px', borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '8px' }}>
+            {data.map((item, i) => (
+              <div key={i} style={{ padding: '2px 0', display: 'flex' }}>
+                <span style={{ color: '#666', marginRight: '4px', paddingTop: '2px' }}>{i}:</span>
+                <div style={{ flex: 1 }}><JsonViewer data={item} level={level + 1} /></div>
+                {i < data.length - 1 && <span style={{ color: '#888' }}>,</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        <span style={{ color: '#888', marginLeft: '16px' }}>]</span>
+      </div>
+    );
+  }
+
+  if (typeof data === 'object') {
+    const keys = Object.keys(data);
+    if (keys.length === 0) return <span style={{ color: '#888' }}>{`{}`}</span>;
+    return (
+      <div style={{ marginLeft: level > 0 ? '12px' : '0' }}>
+        <span 
+          onClick={() => setExpanded(!expanded)} 
+          style={{ cursor: 'pointer', color: '#888', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+        >
+          {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {'{'}
+        </span>
+        {expanded && (
+          <div style={{ marginLeft: '12px', borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '8px' }}>
+            {keys.map((key, i) => (
+              <div key={key} style={{ padding: '2px 0', display: 'flex' }}>
+                <span style={{ color: '#a855f7', marginRight: '6px', paddingTop: '2px' }}>"{key}"</span>
+                <span style={{ color: '#888', marginRight: '6px', paddingTop: '2px' }}>:</span>
+                <div style={{ flex: 1 }}><JsonViewer data={data[key]} level={level + 1} /></div>
+                {i < keys.length - 1 && <span style={{ color: '#888' }}>,</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        <span style={{ color: '#888', marginLeft: '16px' }}>{'}'}</span>
+      </div>
+    );
+  }
+
+  return <span>{String(data)}</span>;
+};
 
 export default function RowDetailDrawer({ isOpen, onClose, record, fields = [], onEdit }) {
   // Handle outside click to close
@@ -139,13 +206,17 @@ export default function RowDetailDrawer({ isOpen, onClose, record, fields = [], 
                     style={{ cursor: "default" }}
                   />
                 ) : field.type === "Object" || field.type === "Array" || typeof record[field.key] === "object" ? (
-                   <textarea
-                     className="form-input custom-scrollbar"
-                     readOnly
-                     rows={4}
-                     value={JSON.stringify(record[field.key] ?? {}, null, 2)}
-                     style={{ cursor: "default", resize: "vertical", fontFamily: "monospace", fontSize: "0.85rem", color: "#3ECF8E" }}
-                   />
+                   <div className="form-input custom-scrollbar" style={{ 
+                       padding: "12px", 
+                       fontSize: "0.85rem", 
+                       fontFamily: "monospace",
+                       background: "rgba(0,0,0,0.3)",
+                       overflowX: "auto",
+                       maxHeight: "300px",
+                       overflowY: "auto"
+                   }}>
+                     <JsonViewer data={record[field.key] ?? {}} />
+                   </div>
                 ) : (
                   <input
                     type="text"

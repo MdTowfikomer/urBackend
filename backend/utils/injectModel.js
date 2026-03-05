@@ -8,16 +8,62 @@ const typeMapping = {
     Date: Date
 };
 
-function buildMongooseSchema(fieldsArray) {
-    const schemaDef = {};
+// Recursive field definition builder
+function buildFieldDef(field) {
+    // Object type — nested sub-schema
+    if (field.type === 'Object' && field.fields && field.fields.length > 0) {
+        const subSchema = {};
+        field.fields.forEach(f => {
+            subSchema[f.key] = buildFieldDef(f);
+        });
+        return { type: subSchema, required: !!field.required };
+    }
 
-    fieldsArray.forEach(field => {
-        schemaDef[field.key] = {
-            type: typeMapping[field.type],
+    // Array type
+    if (field.type === 'Array') {
+        if (!field.items) {
+            return { type: [mongoose.Schema.Types.Mixed], required: !!field.required };
+        }
+        // Array of Objects
+        if (field.items.type === 'Object' && field.items.fields && field.items.fields.length > 0) {
+            const subSchema = {};
+            field.items.fields.forEach(f => {
+                subSchema[f.key] = buildFieldDef(f);
+            });
+            return { type: [subSchema], required: !!field.required };
+        }
+        // Array of Ref
+        if (field.items.type === 'Ref') {
+            return {
+                type: [{ type: mongoose.Schema.Types.ObjectId }],
+                required: !!field.required
+            };
+        }
+        // Array of primitives
+        const itemType = typeMapping[field.items.type] || mongoose.Schema.Types.Mixed;
+        return { type: [itemType], required: !!field.required };
+    }
+
+    // Ref type — stores ObjectId
+    if (field.type === 'Ref') {
+        return {
+            type: mongoose.Schema.Types.ObjectId,
             required: !!field.required
         };
-    });
+    }
 
+    // Primitive types
+    return {
+        type: typeMapping[field.type],
+        required: !!field.required
+    };
+}
+
+function buildMongooseSchema(fieldsArray) {
+    const schemaDef = {};
+    fieldsArray.forEach(field => {
+        schemaDef[field.key] = buildFieldDef(field);
+    });
     return new mongoose.Schema(schemaDef, { timestamps: true });
 }
 
@@ -63,4 +109,14 @@ function getCompiledModel(connection, collectionData, projectId, isExternal) {
     return model;
 }
 
-module.exports = { getCompiledModel };
+// Clear cached model (needed when schema changes)
+function clearCompiledModel(connection, collectionName) {
+    if (modelRegistry.has(connection)) {
+        modelRegistry.get(connection).delete(collectionName);
+    }
+    if (connection.models[collectionName]) {
+        delete connection.models[collectionName];
+    }
+}
+
+module.exports = { getCompiledModel, clearCompiledModel };

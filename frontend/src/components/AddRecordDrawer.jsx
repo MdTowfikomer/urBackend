@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { X, Check, AlertCircle } from "lucide-react";
+import { X, Check, AlertCircle, Plus, Trash2 } from "lucide-react";
 
 /**
  * AddRecordDrawer
- * A slide-over drawer component for adding records to a collection.
- * Optimized for collections with many columns by using a responsive grid layout.
- *
- * @param {boolean} isOpen - Whether the drawer is open
- * @param {function} onClose - Function to close the drawer
- * @param {function} onSubmit - Function to handle form submission (receives form data)
- * @param {array} fields - Array of field objects { key, type, required } from the collection model
- * @param {boolean} isSubmitting - Loading state for submission
+ * A slide-over drawer component for adding/editing records.
+ * Supports nested Object, Array, and Ref field types.
  */
 export default function AddRecordDrawer({
   isOpen,
@@ -23,7 +17,6 @@ export default function AddRecordDrawer({
   const [formData, setFormData] = useState(initialData || {});
   const [errors, setErrors] = useState({});
 
-  // Handle outside click to close
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Escape" && isOpen) {
@@ -35,17 +28,7 @@ export default function AddRecordDrawer({
   }, [isOpen, onClose]);
 
   const handleChange = (key, value) => {
-    let finalValue = value;
-
-    // Basic type conversion
-    // (Number conversion handled in handleSubmit to avoid input issues)
-
-    setFormData((prev) => ({
-      ...prev,
-      [key]: finalValue,
-    }));
-
-    // Clear error for this field if it exists
+    setFormData((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -57,20 +40,16 @@ export default function AddRecordDrawer({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    // Client-side validation
     const newErrors = {};
     const formattedData = { ...formData };
 
     fields.forEach(field => {
       const val = formattedData[field.key];
 
-      // Check required
       if (field.required && (val === undefined || val === "" || val === null)) {
         newErrors[field.key] = "This field is required";
       }
 
-      // Convert types for submission
       if (field.type === "Number" && val !== undefined && val !== "") {
         const num = Number(val);
         if (isNaN(num)) {
@@ -84,10 +63,11 @@ export default function AddRecordDrawer({
         formattedData[field.key] = val === "true" || val === true;
       }
 
-      // Convert Date fields to ISO string
       if (field.type === "Date" && val) {
         formattedData[field.key] = new Date(val).toISOString();
       }
+
+      // Object and Array are set directly by their sub-components
     });
 
     if (Object.keys(newErrors).length > 0) {
@@ -98,8 +78,6 @@ export default function AddRecordDrawer({
     onSubmit(formattedData);
   };
 
-  // Determine grid columns based on field count
-  // If > 8 fields, use 2 columns on wider screens
   const isWideForm = fields.length > 8;
 
   if (!isOpen) return null;
@@ -111,12 +89,9 @@ export default function AddRecordDrawer({
         className="drawer-backdrop"
         onClick={onClose}
         style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.5)",
-          backdropFilter: "blur(4px)",
-          zIndex: 999,
-          animation: "fadeIn 0.2s ease-out"
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)",
+          zIndex: 999, animation: "fadeIn 0.2s ease-out"
         }}
       />
 
@@ -124,15 +99,9 @@ export default function AddRecordDrawer({
       <div
         className="drawer-panel glass-panel"
         style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: isWideForm ? "600px" : "450px",
-          maxWidth: "100%",
-          zIndex: 1000,
-          display: "flex",
-          flexDirection: "column",
+          position: "fixed", top: 0, right: 0, bottom: 0,
+          width: isWideForm ? "600px" : "500px", maxWidth: "100%",
+          zIndex: 1000, display: "flex", flexDirection: "column",
           transform: isOpen ? "translateX(0)" : "translateX(100%)",
           animation: "slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
           borderLeft: "1px solid var(--color-border)",
@@ -141,34 +110,25 @@ export default function AddRecordDrawer({
         }}
       >
         {/* Header */}
-        <div className="drawer-header" style={{
-          padding: "1.5rem",
-          borderBottom: "1px solid var(--color-border)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center"
+        <div style={{
+          padding: "1.5rem", borderBottom: "1px solid var(--color-border)",
+          display: "flex", justifyContent: "space-between", alignItems: "center"
         }}>
           <div>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>{initialData ? "Edit Record" : "Add New Record"}</h2>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>
+              {initialData ? "Edit Record" : "Add New Record"}
+            </h2>
             <p style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", margin: "4px 0 0 0" }}>
               {initialData ? "Update the details for this document." : "Fill in the details for the new document."}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="btn-icon"
-            style={{ color: "var(--color-text-muted)" }}
-          >
+          <button onClick={onClose} className="btn-icon" style={{ color: "var(--color-text-muted)" }}>
             <X size={20} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="drawer-body" style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "1.5rem"
-        }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem" }}>
           <form id="add-record-form" onSubmit={handleSubmit}>
             <div style={{
               display: "grid",
@@ -180,39 +140,30 @@ export default function AddRecordDrawer({
                   key={field.key}
                   className="form-group"
                   style={{
-                    gridColumn: (isWideForm && (field.type === "String" && field.key.length > 20)) ? "span 2" : "auto"
+                    gridColumn: (field.type === "Object" || field.type === "Array") ? "1 / -1" : "auto"
                   }}
                 >
                   <label className="form-label" style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "0.5rem",
-                    fontSize: "0.9rem",
+                    display: "flex", justifyContent: "space-between",
+                    marginBottom: "0.5rem", fontSize: "0.9rem",
                     color: "var(--color-text-secondary)"
                   }}>
                     <span>
                       {field.key}
                       {field.required && <span className="text-danger" style={{ marginLeft: "4px" }}>*</span>}
                     </span>
-                    <span className="field-type-hint" style={{
-                      fontSize: "0.7rem",
-                      color: "var(--color-text-muted)",
-                      background: "rgba(255,255,255,0.05)",
-                      padding: "2px 6px",
-                      borderRadius: "4px"
-                    }}>{field.type}</span>
+                    <span style={{
+                      fontSize: "0.7rem", color: "var(--color-text-muted)",
+                      background: "rgba(255,255,255,0.05)", padding: "2px 6px", borderRadius: "4px"
+                    }}>{field.type}{field.type === 'Ref' && field.ref ? ` → ${field.ref}` : ''}</span>
                   </label>
 
                   {renderInput(field, formData[field.key], handleChange, errors[field.key])}
 
                   {errors[field.key] && (
-                    <div className="error-message" style={{
-                      color: "#ef4444",
-                      fontSize: "0.8rem",
-                      marginTop: "6px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px"
+                    <div style={{
+                      color: "#ef4444", fontSize: "0.8rem", marginTop: "6px",
+                      display: "flex", alignItems: "center", gap: "4px"
                     }}>
                       <AlertCircle size={12} />
                       {errors[field.key]}
@@ -225,29 +176,16 @@ export default function AddRecordDrawer({
         </div>
 
         {/* Footer */}
-        <div className="drawer-footer" style={{
-          padding: "1.25rem 1.5rem",
-          borderTop: "1px solid var(--color-border)",
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: "1rem",
+        <div style={{
+          padding: "1.25rem 1.5rem", borderTop: "1px solid var(--color-border)",
+          display: "flex", justifyContent: "flex-end", gap: "1rem",
           background: "rgba(0,0,0,0.2)"
         }}>
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn btn-ghost"
-            disabled={isSubmitting}
-          >
+          <button type="button" onClick={onClose} className="btn btn-ghost" disabled={isSubmitting}>
             Cancel
           </button>
-          <button
-            type="submit"
-            form="add-record-form"
-            className="btn btn-primary"
-            disabled={isSubmitting}
-            style={{ minWidth: "120px" }}
-          >
+          <button type="submit" form="add-record-form" className="btn btn-primary"
+            disabled={isSubmitting} style={{ minWidth: "120px" }}>
             {isSubmitting ? (
               <span className="animate-spin" style={{ display: "inline-block", border: "2px solid transparent", borderTopColor: "currentColor", borderRadius: "50%", width: "16px", height: "16px" }}></span>
             ) : (
@@ -298,14 +236,29 @@ export default function AddRecordDrawer({
             background-position: right 12px top 50%;
             background-size: 10px auto;
         }
+        .nested-fieldset {
+            border: 1px solid rgba(62, 207, 142, 0.15);
+            border-radius: 8px;
+            padding: 12px;
+            background: rgba(0,0,0,0.1);
+            margin-top: 4px;
+        }
+        .array-item-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
       `}</style>
     </>
   );
 }
 
+// Render input based on field type (recursive for Object/Array)
 function renderInput(field, value, onChange, error) {
   const val = value === undefined || value === null ? "" : value;
 
+  // Boolean
   if (field.type === "Boolean") {
     return (
       <select
@@ -321,6 +274,7 @@ function renderInput(field, value, onChange, error) {
     );
   }
 
+  // Date
   if (field.type === "Date") {
     return (
       <input
@@ -333,6 +287,162 @@ function renderInput(field, value, onChange, error) {
     );
   }
 
+  // Ref — ObjectId text input
+  if (field.type === "Ref") {
+    return (
+      <input
+        type="text"
+        className="form-input"
+        placeholder={`Enter _id from ${field.ref || 'collection'}`}
+        value={val}
+        onChange={(e) => onChange(field.key, e.target.value)}
+        style={error ? { borderColor: "#ef4444" } : {}}
+      />
+    );
+  }
+
+  // Object — grouped sub-inputs
+  if (field.type === "Object" && field.fields) {
+    const objVal = typeof val === 'object' && !Array.isArray(val) ? val : {};
+    return (
+      <div className="nested-fieldset">
+        {field.fields.map(subField => (
+          <div key={subField.key} style={{ marginBottom: '10px' }}>
+            <label style={{
+              display: 'flex', justifyContent: 'space-between',
+              fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '4px'
+            }}>
+              <span>{subField.key}{subField.required && <span style={{ color: '#ef4444' }}> *</span>}</span>
+              <span style={{ fontSize: '0.65rem', opacity: 0.6 }}>{subField.type}</span>
+            </label>
+            {renderInput(
+              subField,
+              objVal[subField.key],
+              (subKey, subVal) => {
+                const newObj = { ...objVal, [subKey]: subVal };
+                onChange(field.key, newObj);
+              },
+              null
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Array — list of items
+  if (field.type === "Array") {
+    const arrVal = Array.isArray(val) ? val : [];
+    const itemType = field.items?.type || 'String';
+
+    const addItem = () => {
+      const defaultVal = itemType === 'Object' ? {} : itemType === 'Boolean' ? false : itemType === 'Number' ? 0 : '';
+      onChange(field.key, [...arrVal, defaultVal]);
+    };
+
+    const removeItem = (idx) => {
+      onChange(field.key, arrVal.filter((_, i) => i !== idx));
+    };
+
+    const updateItem = (idx, newVal) => {
+      const updated = [...arrVal];
+      updated[idx] = newVal;
+      onChange(field.key, updated);
+    };
+
+    return (
+      <div className="nested-fieldset">
+        {arrVal.map((item, idx) => (
+          <div key={idx} className="array-item-row">
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', minWidth: '20px', paddingTop: '10px' }}>
+              {idx}
+            </span>
+            <div style={{ flex: 1 }}>
+              {itemType === 'Object' && field.items?.fields ? (
+                // Array of objects
+                <div className="nested-fieldset" style={{ padding: '8px' }}>
+                  {field.items.fields.map(subField => (
+                    <div key={subField.key} style={{ marginBottom: '8px' }}>
+                      <label style={{
+                        display: 'flex', justifyContent: 'space-between',
+                        fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '3px'
+                      }}>
+                        <span>{subField.key}</span>
+                        <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{subField.type}</span>
+                      </label>
+                      {renderInput(
+                        subField,
+                        typeof item === 'object' ? item[subField.key] : undefined,
+                        (subKey, subVal) => {
+                          const newItem = { ...(typeof item === 'object' ? item : {}), [subKey]: subVal };
+                          updateItem(idx, newItem);
+                        },
+                        null
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : itemType === 'Boolean' ? (
+                <select
+                  className="form-select"
+                  value={String(item)}
+                  onChange={(e) => updateItem(idx, e.target.value === 'true')}
+                >
+                  <option value="true">True</option>
+                  <option value="false">False</option>
+                </select>
+              ) : itemType === 'Date' ? (
+                <input
+                  type="datetime-local"
+                  className="form-input"
+                  value={item || ''}
+                  onChange={(e) => updateItem(idx, e.target.value)}
+                />
+              ) : itemType === 'Ref' ? (
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder={`Enter _id from ${field.items?.ref || 'collection'}`}
+                  value={item || ''}
+                  onChange={(e) => updateItem(idx, e.target.value)}
+                />
+              ) : (
+                <input
+                  type={itemType === 'Number' ? 'number' : 'text'}
+                  className="form-input"
+                  placeholder={`Item ${idx}`}
+                  value={item ?? ''}
+                  onChange={(e) => {
+                    const v = itemType === 'Number' ? Number(e.target.value) : e.target.value;
+                    updateItem(idx, v);
+                  }}
+                  step={itemType === 'Number' ? 'any' : undefined}
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => removeItem(idx)}
+              className="btn-icon"
+              style={{ color: 'var(--color-text-muted)', paddingTop: '8px', flexShrink: 0 }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addItem}
+          className="btn btn-secondary"
+          style={{ fontSize: '0.8rem', width: '100%', marginTop: '4px' }}
+        >
+          <Plus size={14} /> Add Item
+        </button>
+      </div>
+    );
+  }
+
+  // Primitives (String, Number)
   return (
     <input
       type={field.type === "Number" ? "number" : "text"}

@@ -39,14 +39,30 @@ module.exports.createSchema = async (req, res) => {
 
         if (!fullProject.jwtSecret) fullProject.jwtSecret = uuidv4();
 
-        const transformedFields = (fields || []).map(f => {
+        // Recursive field transformer (API uses 'name', internal uses 'key')
+        function transformField(f) {
             const mappedType = f.type.charAt(0).toUpperCase() + f.type.slice(1).toLowerCase();
-            return {
+            const mapped = {
                 key: f.name,
                 type: mappedType,
-                required: f.required === true
+                required: f.required === true,
             };
-        });
+            if (f.ref) mapped.ref = f.ref;
+            if (f.items) {
+                mapped.items = {
+                    type: f.items.type.charAt(0).toUpperCase() + f.items.type.slice(1).toLowerCase(),
+                };
+                if (f.items.fields) {
+                    mapped.items.fields = f.items.fields.map(sf => transformField(sf));
+                }
+            }
+            if (f.fields) {
+                mapped.fields = f.fields.map(sf => transformField(sf));
+            }
+            return mapped;
+        }
+
+        const transformedFields = (fields || []).map(f => transformField(f));
 
         fullProject.collections.push({ name: name, model: transformedFields });
         await fullProject.save();

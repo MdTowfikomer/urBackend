@@ -110,9 +110,28 @@ export default function CollectionTable({ data, activeCollection, onDelete, onVi
                             </span>
                         );
                     }
+                    // Object type — show preview
+                    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+                        const keys = Object.keys(value).filter(k => !k.startsWith('_'));
+                        return (
+                            <div className="cell-content" title={JSON.stringify(value, null, 2)}
+                                style={{ color: '#888', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                                {`{${keys.slice(0, 2).join(', ')}${keys.length > 2 ? ', ...' : ''}}`}
+                            </div>
+                        );
+                    }
+                    // Array type — show count
+                    if (Array.isArray(value)) {
+                        return (
+                            <div className="cell-content" title={JSON.stringify(value, null, 2)}
+                                style={{ color: '#888', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                                [{value.length} item{value.length !== 1 ? 's' : ''}]
+                            </div>
+                        );
+                    }
                     return (
-                        <div className="cell-content" title={String(value)}>
-                            {String(value)}
+                        <div className="cell-content" title={String(value ?? '')}>
+                            {String(value ?? '')}
                         </div>
                     );
                 },

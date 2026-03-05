@@ -659,7 +659,7 @@ export default function Database() {
                 /* Component Specific Styles */
                 .db-layout {
                     display: flex;
-                    height: 100vh;
+                    height: calc(100vh - 56px);
                     width: 100vw;
                     overflow: hidden;
                     background: #050505;

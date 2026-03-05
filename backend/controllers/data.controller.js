@@ -4,6 +4,7 @@ const Project = require("../models/Project");
 const { getConnection } = require("../utils/connection.manager");
 const { getCompiledModel } = require("../utils/injectModel");
 const QueryEngine = require("../utils/queryEngine");
+const { validateData, validateUpdateData } = require("../utils/validateData");
 
 // Validate MongoDB ObjectId
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -20,25 +21,10 @@ module.exports.insertData = async (req, res) => {
 
         const schemaRules = collectionConfig.model;
         const incomingData = req.body;
-        const cleanData = {};
 
-        for (const field of schemaRules) {
-            const value = incomingData[field.key];
-
-            if (field.required && (value === undefined || value === null)) {
-                return res.status(400).json({ error: `Field '${field.key}' is required.` });
-            }
-
-            if (value !== undefined) {
-                // Strong Type Checks (Added String and Date)
-                if (field.type === 'Number' && typeof value !== 'number') return res.status(400).json({ error: `Field '${field.key}' must be a Number.` });
-                if (field.type === 'Boolean' && typeof value !== 'boolean') return res.status(400).json({ error: `Field '${field.key}' must be a Boolean.` });
-                if (field.type === 'String' && typeof value !== 'string') return res.status(400).json({ error: `Field '${field.key}' must be a String.` });
-                if (field.type === 'Date' && isNaN(Date.parse(value))) return res.status(400).json({ error: `Field '${field.key}' must be a valid Date.` });
-
-                cleanData[field.key] = value;
-            }
-        }
+        // Recursive validation for all field types
+        const { error, cleanData } = validateData(incomingData, schemaRules);
+        if (error) return res.status(400).json({ error });
 
         const safeData = sanitize(cleanData);
 
@@ -137,20 +123,10 @@ module.exports.updateSingleData = async (req, res) => {
         const connection = await getConnection(project._id);
         const Model = getCompiledModel(connection, collectionConfig, project._id, project.resources.db.isExternal);
 
-        // Schma Validation
+        // Recursive validation for all field types
         const schemaRules = collectionConfig.model;
-        const updateData = {};
-        for (const key in incomingData) {
-            const fieldRule = schemaRules.find(f => f.key === key);
-            if (!fieldRule) continue; 
-
-            const value = incomingData[key];
-            if (fieldRule.type === 'Number' && typeof value !== 'number') return res.status(400).json({ error: `Field '${key}' must be a Number.` });
-            if (fieldRule.type === 'Boolean' && typeof value !== 'boolean') return res.status(400).json({ error: `Field '${key}' must be a Boolean.` });
-            if (fieldRule.type === 'String' && typeof value !== 'string') return res.status(400).json({ error: `Field '${key}' must be a String.` });
-
-            updateData[key] = value;
-        }
+        const { error: validationError, updateData } = validateUpdateData(incomingData, schemaRules);
+        if (validationError) return res.status(400).json({ error: validationError });
 
         const sanitizedData = sanitize(updateData);
 

@@ -12,10 +12,16 @@ const fieldSchema = new mongoose.Schema({
     type: {
         type: String,
         required: true,
-        enum: ['String', 'Number', 'Boolean', 'Date']
+        enum: ['String', 'Number', 'Boolean', 'Date', 'Object', 'Array', 'Ref']
     },
-    required: { type: Boolean, default: false }
+    required: { type: Boolean, default: false },
+    // For type: 'Ref' — target collection name within the same project
+    ref: { type: String },
+    // For type: 'Array' — describes each array item { type, fields? }
+    items: { type: mongoose.Schema.Types.Mixed },
 });
+// For type: 'Object' — recursive sub-fields
+fieldSchema.add({ fields: [fieldSchema] });
 
 const collectionSchema = new mongoose.Schema({
     name: { type: String, required: true },

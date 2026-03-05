@@ -34,16 +34,18 @@ function MainLayout({ children }) {
 
             {/* Main Content Area */}
             {/* If Project Route, remove margin-left (full width) */}
-            {/* Add paddingTop to account for fixed global header */}
-            <div className={`main-content ${isProjectRoute ? 'full-width' : ''}`} style={{ paddingTop: 'var(--header-height)' }}>
+            {/* Add paddingTop to account for fixed global header only if not in project route */}
+            <div className={`main-content ${isProjectRoute ? 'full-width' : ''}`} style={{ paddingTop: isProjectRoute ? '0' : 'var(--header-height)' }}>
 
                 {/* Global Header */}
-                <Header
-                    logo={logoImage}
-                    onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-                    // Hide toggle button if sidebar is hidden
-                    showToggle={!isProjectRoute}
-                />
+                {!isProjectRoute && (
+                    <Header
+                        logo={logoImage}
+                        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                        // Hide toggle button if sidebar is hidden
+                        showToggle={true}
+                    />
+                )}
 
                 {/* Project Navigation Bar - Only visible in project routes */}
                 {isProjectRoute && <ProjectNavbar />}

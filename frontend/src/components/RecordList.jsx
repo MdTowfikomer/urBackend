@@ -36,7 +36,11 @@ export default function RecordList({ data, activeCollection, onView }) {
                                         <div key={field.key} className="preview-field">
                                             <span className="field-label">{field.key}</span>
                                             <span className="field-value truncate">
-                                                {String(field.value ?? '')}
+                                                {field.value !== null && typeof field.value === 'object' && !Array.isArray(field.value)
+                                                    ? `{${Object.keys(field.value).filter(k => !k.startsWith('_')).slice(0, 2).join(', ')}...}`
+                                                    : Array.isArray(field.value)
+                                                        ? `[${field.value.length} item${field.value.length !== 1 ? 's' : ''}]`
+                                                        : String(field.value ?? '')}
                                             </span>
                                         </div>
                                     ))}

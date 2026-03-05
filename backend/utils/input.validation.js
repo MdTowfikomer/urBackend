@@ -55,25 +55,74 @@ module.exports.createProjectSchema = z.object({
     description: z.string().optional()
 });
 
-// Create Collection Schema
+// Recursive field schema with depth limiting (max 3 levels)
+const MAX_FIELD_DEPTH = 3;
+
+const buildFieldSchemaZod = (depth = 1) => {
+    const base = z.object({
+        key: z.string().min(1, "Field name is required"),
+        type: z.enum(['String', 'Number', 'Boolean', 'Date', 'Object', 'Array', 'Ref']),
+        required: z.boolean().optional(),
+        ref: z.string().optional(),
+        items: z.object({
+            type: z.enum(['String', 'Number', 'Boolean', 'Date', 'Object', 'Ref']),
+            fields: z.lazy(() => depth < MAX_FIELD_DEPTH ? z.array(buildFieldSchemaZod(depth + 1)).optional() : z.undefined().optional()),
+        }).optional(),
+        fields: z.lazy(() => depth < MAX_FIELD_DEPTH ? z.array(buildFieldSchemaZod(depth + 1)).optional() : z.undefined().optional()),
+    }).refine(data => {
+        if (data.type === 'Object' && (!data.fields || data.fields.length === 0)) return false;
+        if (data.type === 'Array' && !data.items) return false;
+        if (data.type === 'Ref' && !data.ref) return false;
+        // Block nesting beyond max depth
+        if (depth >= MAX_FIELD_DEPTH && (data.type === 'Object' || (data.type === 'Array' && data.items?.type === 'Object'))) return false;
+        return true;
+    }, { message: "Invalid field configuration for the given type, or nesting depth exceeded (max 3 levels)." });
+
+    return base;
+};
+
+const fieldSchemaZod = buildFieldSchemaZod(1);
+
+// Create Collection Schema (Dashboard route)
 module.exports.createCollectionSchema = z.object({
     projectId: z.string().min(1, "Project ID is required"),
     collectionName: z.string().min(1, "Collection Name is required"),
-    schema: z.array(z.object({
-        key: z.string(),
-        type: z.enum(['String', 'Number', 'Boolean', 'Date']),
-        required: z.boolean().optional()
-    })).optional()
+    schema: z.array(fieldSchemaZod).optional()
 });
 
 // Create Collection Schema (API Key based)
+const buildApiFieldSchemaZod = (depth = 1) => {
+    const base = z.object({
+        name: z.string().min(1, "Field name is required"),
+        type: z.enum([
+            'string', 'number', 'boolean', 'date', 'object', 'array', 'ref',
+            'String', 'Number', 'Boolean', 'Date', 'Object', 'Array', 'Ref'
+        ]),
+        required: z.boolean().optional(),
+        ref: z.string().optional(),
+        items: z.object({
+            type: z.enum([
+                'string', 'number', 'boolean', 'date', 'object', 'ref',
+                'String', 'Number', 'Boolean', 'Date', 'Object', 'Ref'
+            ]),
+            fields: z.lazy(() => depth < MAX_FIELD_DEPTH ? z.array(buildApiFieldSchemaZod(depth + 1)).optional() : z.undefined().optional()),
+        }).optional(),
+        fields: z.lazy(() => depth < MAX_FIELD_DEPTH ? z.array(buildApiFieldSchemaZod(depth + 1)).optional() : z.undefined().optional()),
+    }).refine(data => {
+        const normalType = data.type.charAt(0).toUpperCase() + data.type.slice(1).toLowerCase();
+        if (normalType === 'Object' && (!data.fields || data.fields.length === 0)) return false;
+        if (normalType === 'Array' && !data.items) return false;
+        if (normalType === 'Ref' && !data.ref) return false;
+        if (depth >= MAX_FIELD_DEPTH && (normalType === 'Object' || (normalType === 'Array' && data.items?.type?.charAt(0).toUpperCase() + data.items?.type?.slice(1).toLowerCase() === 'Object'))) return false;
+        return true;
+    }, { message: "Invalid field configuration for the given type, or nesting depth exceeded (max 3 levels)." });
+
+    return base;
+};
+
 module.exports.createSchemaApiKeySchema = z.object({
     name: z.string().min(1, "Collection Name is required"),
-    fields: z.array(z.object({
-        name: z.string(),
-        type: z.enum(['string', 'number', 'boolean', 'date', 'String', 'Number', 'Boolean', 'Date']),
-        required: z.boolean().optional()
-    })).optional()
+    fields: z.array(buildApiFieldSchemaZod(1)).optional()
 });
 
 module.exports.sanitize = (obj) => {
