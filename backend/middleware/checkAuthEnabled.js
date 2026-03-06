@@ -18,6 +18,17 @@ module.exports = (req, res, next) => {
         });
     }
 
+    // ENFORCE SCHEMA CONTRACT
+    const hasEmail = usersCollection.model.find(f => f.key === 'email' && f.type === 'String' && f.required);
+    const hasPassword = usersCollection.model.find(f => f.key === 'password' && f.type === 'String' && f.required);
+    
+    if (!hasEmail || !hasPassword) {
+        return res.status(422).json({
+            error: "Invalid Users Schema",
+            message: "The 'users' collection is missing required 'email' and 'password' string fields. Please fix the schema in the dashboard."
+        });
+    }
+
     // Attach the usersSchema to the request so controllers can use it for dynamic validation
     req.usersSchema = usersCollection.model;
     

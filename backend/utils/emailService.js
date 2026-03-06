@@ -127,15 +127,24 @@ async function sendReleaseEmail(email, { version, title, content }) {
 }
 
 async function sendAuthOtpEmail(email, { otp, type, pname }) {
-    // 1. SANITIZE PNAME
-    const sPname = pname ? escapeHtml(pname) : "urBackend";
-    
-    // 2. DERIVE SAFE EMAIL HANDLE
-    let safeEmailHandle = sPname.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    if (!safeEmailHandle || safeEmailHandle.length < 3) {
+    const rawPname = pname || "urBackend";
+
+    // 1. DERIVE SAFE EMAIL HANDLE (Before HTML escaping)
+    let safeEmailHandle = rawPname.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    if (safeEmailHandle.length < 3) {
         safeEmailHandle = "no-reply-urbackend";
     }
     safeEmailHandle = safeEmailHandle.substring(0, 30); // Truncate
+
+    // 2. CREATE SAFE PROJECT NAME HTML (For use inside logo/HTML)
+    const safeProjectNameHtml = escapeHtml(rawPname);
+
+    // 3. CREATE SAFE DISPLAY NAME (For email headers, stripping CR/LF)
+    const safeDisplayName = rawPname.replace(/[\r\n]/g, '').trim();
+    // Quote if contains special characters to be safe for email headers
+    const finalDisplayName = /^[a-zA-Z0-9 ]+$/.test(safeDisplayName) 
+        ? safeDisplayName 
+        : `"${safeDisplayName.replace(/"/g, '\\"')}"`;
     
     const isVerify = type === 'verification';
     const subject = isVerify ? "Verify your account" : "Reset your password";
@@ -162,7 +171,7 @@ async function sendAuthOtpEmail(email, { otp, type, pname }) {
             </head>
             <body>
                 <div class="container">
-                    <div class="logo">${safeEmailHandle}</div>
+                    <div class="logo">${safeProjectNameHtml}</div>
                     <h1>${header}</h1>
                     <div class="content">
                         ${desc} This code will expire in 5 minutes.
@@ -181,12 +190,13 @@ async function sendAuthOtpEmail(email, { otp, type, pname }) {
 
 
 
+        const fromAddress = `${finalDisplayName} <${safeEmailHandle}.urbackend@apps.bitbros.in>`;
         const { data, error } = await resend.emails.send({
-            from: `${sPname} <${safeEmailHandle}.urbackend@apps.bitbros.in>`,
+            from: fromAddress,
             to: email,
             subject: subject,
             html: htmlContent,
-            replyTo: `${sPname} <${safeEmailHandle}.urbackend@apps.bitbros.in>`,
+            replyTo: fromAddress,
         });
 
         if (error) {

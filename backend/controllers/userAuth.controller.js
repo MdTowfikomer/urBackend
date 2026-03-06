@@ -314,7 +314,9 @@ module.exports.updateProfile = async (req, res) => {
         const decoded = jwt.verify(token, project.jwtSecret);
 
         const username = req.body.username;
-        if (!username || username.length < 3) return res.status(400).json({ error: "Username must be at least 3 characters." });
+        if (!username || username.length < 3 || username.length > 50) {
+            return res.status(400).json({ error: "Username must be between 3 and 50 characters." });
+        }
 
         const collection = await getAuthCollection(project);
 

@@ -13,7 +13,7 @@ module.exports.loginSchema = z.object({
 module.exports.signupSchema = z.object({
     username: z.string()
         .min(3, { message: "Username must be at least 3 characters." })
-        .max(30, { message: "Username is too long." }),
+        .max(50, { message: "Username must be between 3 and 50 characters." }),
 
     email: z.string()
         .min(1, { message: "Email is required." })
@@ -166,7 +166,7 @@ module.exports.updateExternalConfigSchema = z.object({
 module.exports.userSignupSchema = z.object({
     username: z.string()
         .min(3, { message: "Username must be at least 3 characters." })
-        .max(30, { message: "Username is too long." }).optional(),
+        .max(50, { message: "Username must be between 3 and 50 characters." }).optional(),
 
     email: z.string()
         .min(1, { message: "Email is required." })

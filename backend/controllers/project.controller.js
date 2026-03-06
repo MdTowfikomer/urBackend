@@ -14,7 +14,15 @@ const { getCompiledModel } = require("../utils/injectModel")
 const QueryEngine = require("../utils/queryEngine");
 const { storageRegistry } = require("../utils/registry");
 const { deleteProjectByApiKeyCache, setProjectById, getProjectById, deleteProjectById } = require("../services/redisCaching");
+const { v4: uuidv4 } = require('uuid');
 const { getPublicIp } = require("../utils/network");
+
+const validateUsersSchema = (schema) => {
+    if (!Array.isArray(schema)) return false;
+    const hasEmail = schema.find(f => f.key === 'email' && f.type === 'String' && f.required);
+    const hasPassword = schema.find(f => f.key === 'password' && f.type === 'String' && f.required);
+    return !!(hasEmail && hasPassword);
+};
 
 
 
@@ -312,6 +320,13 @@ module.exports.createCollection = async (req, res) => {
         if (exists) return res.status(400).json({ error: 'Collection already exists' });
 
         if (!project.jwtSecret) project.jwtSecret = uuidv4();
+
+        // ENFORCE USERS SCHEMA
+        if (collectionName === 'users') {
+            if (!validateUsersSchema(schema)) {
+                return res.status(422).json({ error: "The 'users' collection must have required 'email' and 'password' string fields." });
+            }
+        }
 
         project.collections.push({ name: collectionName, model: schema });
         await project.save();
@@ -884,6 +899,31 @@ module.exports.toggleAuth = async (req, res) => {
         // Ensure user owns project
         const project = await Project.findOne({ _id: projectId, owner: req.user._id });
         if (!project) return res.status(404).json({ error: "Project not found" });
+
+        if (enable) {
+            let usersCol = project.collections.find(c => c.name === 'users');
+            if (!usersCol) {
+                // Auto-create users collection with default schema
+                usersCol = {
+                    name: 'users',
+                    model: [
+                        { key: 'email', type: 'String', required: true },
+                        { key: 'username', type: 'String', required: false },
+                        { key: 'password', type: 'String', required: true },
+                        { key: 'emailVerified', type: 'Boolean', required: false }
+                    ]
+                };
+                project.collections.push(usersCol);
+            } else {
+                // Validate existing users schema
+                if (!validateUsersSchema(usersCol.model)) {
+                    return res.status(422).json({ 
+                        error: "Invalid Users Schema",
+                        message: "The 'users' collection must have required 'email' and 'password' string fields. Please fix the schema before enabling Auth." 
+                    });
+                }
+            }
+        }
 
         project.isAuthEnabled = !!enable;
         await project.save();

@@ -105,8 +105,14 @@ export default function Database() {
             (c) => c.name === queryCollection
           );
           if (found) setActiveCollection(found);
-        } else if (res.data.collections.length > 0) {
-          setActiveCollection(res.data.collections[0]);
+        } else {
+          // Default to the first non-'users' collection if possible to keep Auth data separate from general data management
+          const filtered = res.data.collections.filter(c => c.name !== 'users');
+          if (filtered.length > 0) {
+            setActiveCollection(filtered[0]);
+          } else if (res.data.collections.length > 0) {
+            setActiveCollection(res.data.collections[0]);
+          }
         }
       } catch {
         toast.error("Failed to load project");

@@ -48,7 +48,7 @@ const DynamicUserForm = ({ schema, formData, onChange, isEdit = false }) => {
                                 type="number"
                                 className="input-field"
                                 required={field.required}
-                                value={formData[field.key] || ''}
+                                value={formData[field.key] ?? ''}
                                 onChange={(e) => onChange(field.key, Number(e.target.value))}
                             />
                         ) : field.type === 'Date' ? (
@@ -97,7 +97,12 @@ export default function Auth() {
     const [editingUser, setEditingUser] = useState(null); // Full user object from admin endpoint
     const [isUpdatingUser, setIsUpdatingUser] = useState(false);
     const [editFormData, setEditFormData] = useState({});
-    const [resetUserId, setResetUserId] = useState(null);
+    
+    // Password Reset State
+    const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+    const [resetTargetUser, setResetTargetUser] = useState(null);
+    const [newPassVal, setNewPassVal] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
 
     const usersCollection = project?.collections?.find(c => c.name === 'users');
     const hasUserCollection = !!usersCollection;
@@ -179,7 +184,7 @@ export default function Auth() {
             );
             setUsers([res.data.user, ...users]);
             setIsAddModalOpen(false);
-            setAddFormData({ email: '', password: '' });
+            setAddFormData({ email: '', password: '', username: '' });
             toast.success("User created successfully!");
         } catch (err) {
             console.error(err);
@@ -189,25 +194,31 @@ export default function Auth() {
         }
     };
 
-    // Handle Reset Password
-    const handleResetPassword = async (userId) => {
-        const newPassword = prompt("Enter new password for this user (min 6 characters):");
-        if (!newPassword) return;
-        if (newPassword.length < 6) return toast.error("Password must be at least 6 characters");
+    // Handle Reset Password (Trigger Modal)
+    const handleResetClick = (user) => {
+        setResetTargetUser(user);
+        setNewPassVal('');
+        setIsResetModalOpen(true);
+    };
 
-        setResetUserId(userId);
+    const confirmResetPassword = async (e) => {
+        if (e) e.preventDefault();
+        if (!newPassVal || newPassVal.length < 6) return toast.error("Password must be at least 6 characters");
+
+        setIsResetting(true);
         try {
             await axios.patch(
-                `${API_URL}/api/projects/${projectId}/admin/users/${userId}/password`,
-                { newPassword },
+                `${API_URL}/api/projects/${projectId}/admin/users/${resetTargetUser._id}/password`,
+                { newPassword: newPassVal },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             toast.success("Password reset successfully!");
+            setIsResetModalOpen(false);
         } catch (err) {
             console.error(err);
             toast.error(err.response?.data?.error || "Failed to reset password");
         } finally {
-            setResetUserId(null);
+            setIsResetting(false);
         }
     };
 
@@ -221,7 +232,7 @@ export default function Auth() {
             setEditingUser(res.data);
             // Convert everything except core fields to form data
             const customFields = { ...res.data };
-            ['_id', 'email', 'password', 'emailVerified', 'createdAt', 'updatedAt'].forEach(key => delete customFields[key]);
+            ['_id', 'email', 'password', 'emailVerified', 'createdAt', 'updatedAt'].forEach(key => { delete customFields[key]; });
             setEditFormData(customFields);
         } catch {
             toast.error("Failed to fetch user details");
@@ -422,12 +433,12 @@ export default function Auth() {
                                                 >
                                                     <Edit2 size={18} />
                                                 </button>
-                                                <button
-                                                    onClick={() => handleResetPassword(user._id)}
+                                                 <button
+                                                    onClick={() => handleResetClick(user)}
                                                     className="btn btn-ghost"
                                                     style={{ color: 'var(--color-primary)', padding: '8px', borderRadius: '6px', marginRight: '4px' }}
                                                     title="Reset Password"
-                                                    disabled={resetUserId === user._id}
+                                                    disabled={isResetting && resetTargetUser?._id === user._id}
                                                 >
                                                     <Key size={18} />
                                                 </button>
@@ -516,6 +527,46 @@ export default function Auth() {
                 </div>
             )}
 
+            {/* Password Reset Modal */}
+            {isResetModalOpen && (
+                <div className="modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(5px)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setIsResetModalOpen(false)}>
+                    <div className="card modal-content" style={{ width: '100%', maxWidth: '400px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                        <button className="btn-icon" style={{ position: 'absolute', top: '16px', right: '16px' }} onClick={() => setIsResetModalOpen(false)}>
+                            <X size={20} />
+                        </button>
+                        <h2 style={{ fontSize: '1.4rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Key size={24} color="var(--color-primary)" /> Reset Password
+                        </h2>
+                        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                            Enter a new password for <strong>{resetTargetUser?.email}</strong>
+                        </p>
+                        
+                        <form onSubmit={confirmResetPassword}>
+                            <div className="input-group" style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '8px', display: 'block' }}>
+                                    New Password
+                                </label>
+                                <input
+                                    type="password"
+                                    className="input-field"
+                                    placeholder="Min 6 characters"
+                                    required
+                                    autoFocus
+                                    value={newPassVal}
+                                    onChange={(e) => setNewPassVal(e.target.value)}
+                                />
+                            </div>
+                            
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                                <button type="button" className="btn btn-secondary" onClick={() => setIsResetModalOpen(false)}>Cancel</button>
+                                <button type="submit" className="btn btn-primary" disabled={isResetting}>
+                                    {isResetting ? 'Updating...' : 'Update Password'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
             <style>{`
                 @keyframes fadeInUp {
                     from { opacity: 0; transform: translateY(10px); }

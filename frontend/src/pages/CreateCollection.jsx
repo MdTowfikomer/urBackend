@@ -25,6 +25,7 @@ function FieldRow({ field, index, depth, collections, onChange, onRemove }) {
     const [expanded, setExpanded] = useState(true);
 
     const handleChange = (prop, value) => {
+        if (field.locked) return;
         const updated = { ...field, [prop]: value };
 
         // Reset sub-properties when type changes
@@ -141,11 +142,13 @@ function FieldRow({ field, index, depth, collections, onChange, onRemove }) {
                 {/* Type selector */}
                 <select
                     value={field.type}
+                    disabled={field.locked}
                     onChange={(e) => handleChange('type', e.target.value)}
                     className="input-field"
                     style={{
                         flex: 1, border: 'none', background: 'transparent',
-                        padding: '4px 0', cursor: 'pointer', fontSize: '0.9rem'
+                        padding: '4px 0', cursor: field.locked ? 'not-allowed' : 'pointer', fontSize: '0.9rem',
+                        opacity: field.locked ? 0.6 : 1
                     }}
                 >
                     {availableTypes.map(t => (
@@ -157,10 +160,12 @@ function FieldRow({ field, index, depth, collections, onChange, onRemove }) {
                 <input
                     type="checkbox"
                     checked={field.required}
+                    disabled={field.locked}
                     onChange={(e) => handleChange('required', e.target.checked)}
                     style={{
                         accentColor: 'var(--color-primary)',
-                        transform: 'scale(1.1)', cursor: 'pointer', flexShrink: 0
+                        transform: 'scale(1.1)', cursor: field.locked ? 'not-allowed' : 'pointer', flexShrink: 0,
+                        opacity: field.locked ? 0.6 : 1
                     }}
                 />
 

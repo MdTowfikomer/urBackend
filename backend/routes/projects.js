@@ -106,9 +106,11 @@ router.patch('/:projectId/auth/toggle', authMiddleware, verifyEmail, toggleAuth)
 
 // ADMIN AUTH
 const checkAuthEnabled = require('../middleware/checkAuthEnabled');
-router.post('/:projectId/admin/users', checkAuthEnabled, authMiddleware, createAdminUser);
-router.patch('/:projectId/admin/users/:userId/password', checkAuthEnabled, authMiddleware, resetPassword);
-router.get('/:projectId/admin/users/:userId', checkAuthEnabled, authMiddleware, getUserDetails);
-router.put('/:projectId/admin/users/:userId', checkAuthEnabled, authMiddleware, updateAdminUser);
+const loadProjectForAdmin = require('../middleware/loadProjectForAdmin');
+
+router.post('/:projectId/admin/users', authMiddleware, loadProjectForAdmin, checkAuthEnabled, createAdminUser);
+router.patch('/:projectId/admin/users/:userId/password', authMiddleware, loadProjectForAdmin, checkAuthEnabled, resetPassword);
+router.get('/:projectId/admin/users/:userId', authMiddleware, loadProjectForAdmin, checkAuthEnabled, getUserDetails);
+router.put('/:projectId/admin/users/:userId', authMiddleware, loadProjectForAdmin, checkAuthEnabled, updateAdminUser);
 
 module.exports = router;
