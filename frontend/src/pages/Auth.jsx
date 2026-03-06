@@ -78,7 +78,7 @@ const DynamicUserForm = ({ schema, formData, onChange, isEdit = false }) => {
                                             const parsed = JSON.parse(val);
                                             onChange(`_error_${field.key}`, null);
                                             onChange(field.key, parsed); // Store parsed value if valid
-                                        } catch (err) {
+                                        } catch {
                                             onChange(`_error_${field.key}`, "Invalid JSON format");
                                         }
                                     }}
