@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://urbackend.bitbros.in"><strong>Dashboard</strong></a> ·
   <a href="docs/introduction.md"><strong>Docs</strong></a> ·
+  <a href="docs/getting-started.md"><strong>Quick Start</strong></a> ·
   <a href="https://discord.gg/CXJjvJkNWn"><strong>Discord</strong></a>
 </p>
 
@@ -69,19 +70,6 @@ graph LR
 
 ---
 
-## 🛠️ Infrastructure
-
-<div align="center">
-
-| **Core System** | **Developer UI** | **Data Layer** |
-| :--- | :--- | :--- |
-| Node.js & Express | React.js (Vite) | MongoDB (Mongoose) |
-| JWT Authentication | Lucide React | Redis & BullMQ |
-| Storage Manager | Recharts | Supabase (BYOD) |
-
-</div>
-
----
 
 ## 🤝 Community
 
