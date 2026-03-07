@@ -70,7 +70,11 @@ graph LR
 
 ---
 
+## 🏗️ Architecture
 
+Explore our [Architecture Diagram](ARCHITECTURE_DIAGRAM.md) to understand the system design, core components, and data flow in detail.
+
+---
 ## 🤝 Community
 
 Join hundreds of developers building faster without the backend headaches.
