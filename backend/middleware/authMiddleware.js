@@ -10,7 +10,7 @@ module.exports = function (req, res, next) {
     }
 
     // Extract the actual token by removing the "Bearer " prefix
-    // We split the header value by space and take the second part
+    // spliting the header value by space and take the second part
     const token = authHeader.split(' ')[1];
 
     // If token is missing after splitting, the format is invalid
@@ -32,7 +32,6 @@ module.exports = function (req, res, next) {
         console.log("err---------------2")
         console.error(err);
 
-        // Do not expose detailed error information in production
         res.status(400).json({ error: 'Invalid Token' });
     }
 };

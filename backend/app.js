@@ -15,12 +15,13 @@ const app = express();
 app.set('trust proxy', 1);
 const GC = require('./utils/GC');
 const { getPublicIp } = require('./utils/network');
+const { capture } = require('@kiroo/sdk');
+
 
 // Initialize Queue Workers
 require('./queues/emailQueue');
 require('./queues/authEmailQueue');
 
-// Middleware (We apply admin options globally except where overridden via dynamic handling)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -31,7 +32,6 @@ const dashboardLimiter = rateLimit({
     skip: (req) => process.env.NODE_ENV === 'development',
 });
 
-// FIX 3: Strict limiter for auth endpoints (login / register)
 const { authLimiter } = require('./middleware/auth_limiter');
 
 
@@ -64,6 +64,14 @@ if (process.env.NODE_ENV !== 'test') {
     GC.garbageCollect();
     GC.storageGarbageCollect();
 }
+
+app.use(capture({
+  supabaseUrl: process.env.SUPABASE_URL,
+  supabaseKey: process.env.SUPABASE_KEY,
+  bucket: process.env.SUPABASE_BUCKET,
+  sampleRate: 0.2
+}));
+
 
 
 // LOGGING
@@ -123,6 +131,11 @@ app.use((err, req, res, next) => {
         message: err.message
     });
 });
+
+app.use((req, res) => {
+    const id = res.get("X-Kiroo-Replay-ID");
+    res.json({error: "Not Found", replayId: id})   
+})
 // INITIALIZATION
 if (process.env.NODE_ENV !== 'test') {
 

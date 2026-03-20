@@ -10,6 +10,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@kiroo/sdk": "^0.1.2",
     "@supabase/supabase-js": "^2.84.0",
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.70.1",
