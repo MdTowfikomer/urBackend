@@ -33,7 +33,7 @@ const dashboardLimiter = rateLimit({
 });
 
 const whitelist = (function() {
-    const whitelist = ['https://urbackend.bitbros.in'];
+    const whitelist = [process.env.FRONTEND_URL];
     if (process.env.NODE_ENV === 'development') {
         whitelist.push('http://localhost:5173');
     }
