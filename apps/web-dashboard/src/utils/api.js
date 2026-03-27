@@ -3,19 +3,43 @@ import { API_URL } from '../config';
 
 const api = axios.create({
     baseURL: API_URL,
-    withCredentials: true, // Crucial for sending/receiving cookies
+    withCredentials: true,
 });
 
-// Response interceptor to handle 401s and refresh token
+let csrfToken = null;
+
+const fetchCsrfToken = async () => {
+    try {
+        const response = await axios.get(`${API_URL}/api/auth/csrf-token`, { withCredentials: true });
+        csrfToken = response.data.csrfToken;
+        return csrfToken;
+    } catch (err) {
+        console.error("Failed to fetch CSRF token:", err);
+        return null;
+    }
+};
+
+api.interceptors.request.use(async (config) => {
+    const method = config.method.toLowerCase();
+    
+    if (['post', 'put', 'delete', 'patch'].includes(method)) {
+        if (!csrfToken) {
+            csrfToken = await fetchCsrfToken();
+        }
+        if (csrfToken) {
+            config.headers['X-CSRF-Token'] = csrfToken;
+        }
+    }
+    return config;
+}, (error) => Promise.reject(error));
+
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
 
-        // If error is 401 and we haven't retried yet
         if (error.response?.status === 401 && !originalRequest._retry) {
             
-            // Avoid infinite loops if refresh-token itself fails with 401
             if (originalRequest.url.includes('/api/auth/refresh-token')) {
                 return Promise.reject(error);
             }
@@ -23,14 +47,10 @@ api.interceptors.response.use(
             originalRequest._retry = true;
 
             try {
-                // Attempt to refresh tokens
                 await axios.post(`${API_URL}/api/auth/refresh-token`, {}, { withCredentials: true });
                 
-                // If refresh succeeds, retry the original request
                 return api(originalRequest);
             } catch (refreshError) {
-                // If refresh fails, we can't do much - user needs to log in again
-                // We'll let the component/AuthContext handle the final failure
                 return Promise.reject(refreshError);
             }
         }

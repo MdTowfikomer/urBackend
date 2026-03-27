@@ -19,15 +19,7 @@ app.set('trust proxy', 1);
 const {garbageCollect, storageGarbageCollect, getPublicIp} = require('@urbackend/common');
 const { capture } = require('@kiroo/sdk');
 
-
-// Initialize Queue Workers
 const { emailQueue, authEmailQueue } = require('@urbackend/common');
-
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-app.use(csurf({ cookie: true }));
 
 const dashboardLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -37,21 +29,44 @@ const dashboardLimiter = rateLimit({
 });
 
 const whitelist = (function() {
-    const whitelist = [process.env.FRONTEND_URL];
-    if (process.env.NODE_ENV === 'development') {
-        whitelist.push('http://localhost:5173');
+    // Default allowed origins
+    const allowed = [process.env.FRONTEND_URL];
+    
+    // Support comma-separated list of origins in .env
+    if (process.env.ALLOWED_ORIGINS) {
+        const extraOrigins = process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim());
+        allowed.push(...extraOrigins);
     }
+
+    if (process.env.NODE_ENV === 'development') {
+        allowed.push('http://localhost:5173');
+        allowed.push('http://localhost:3000');
+    }
+
+    // Filter out duplicates and empty values
+    const uniqueAllowed = [...new Set(allowed.filter(Boolean))];
+
     return {
-        get: () => {
-            return whitelist.slice();
-        }
+        get: () => uniqueAllowed
     };
 })()
-
 
 app.use(cors({
     origin: whitelist.get(),
     credentials: true,
+}));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use(cookieParser());
+
+app.use(csurf({ 
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    } 
 }));
 
 
@@ -69,14 +84,12 @@ app.use(capture({
 
 
 
-// Route Imports
 const authRoute = require('./routes/auth');
 const projectRoute = require('./routes/projects');
 const releaseRoute = require('./routes/releases');
 
-// ROUTES SETUP 
 app.use('/api/auth', authRoute); 
-app.use('/api/projects', dashboardLimiter, projectRoute); // Project Mngmt
+app.use('/api/projects', dashboardLimiter, projectRoute);
 app.use('/api/releases', releaseRoute);
 
 
@@ -87,13 +100,20 @@ app.get('/api/server-ip', async (req, res) => {
     res.json({ ip });
 });
 
-// Test Route
 app.get('/', (req, res) => {
     res.status(200).json({ status: "success", message: "urBackend API is running 🚀" })
 });
 
 // Global Error Handler
 app.use((err, req, res, next) => {
+    // CSRF Error Handling
+    if (err.code === 'EBADCSRFTOKEN') {
+        return res.status(403).json({
+            error: "Invalid CSRF token",
+            message: "The form has expired or the CSRF token is invalid. Please refresh the page and try again."
+        });
+    }
+
     if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
         return res.status(400).json({
             error: "Invalid JSON format",
@@ -112,7 +132,6 @@ app.use((req, res) => {
     const id = res.get("X-Kiroo-Replay-ID");
     res.json({error: "Not Found", replayId: id})   
 })
-// INITIALIZATION
 if (process.env.NODE_ENV !== 'test') {
 
     const PORT = process.env.PORT || 1234;

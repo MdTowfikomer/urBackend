@@ -32,7 +32,6 @@ const sendTokenResponse = async (user, statusCode, res) => {
         { expiresIn: REFRESH_TOKEN_EXPIRES_IN }
     );
 
-    // Save refresh token to DB (Rotation)
     user.refreshToken = refreshToken;
     await user.save();
 
@@ -40,7 +39,7 @@ const sendTokenResponse = async (user, statusCode, res) => {
         httpOnly: true,
         expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'Strict' // Use Strict for better CSRF protection
+        sameSite: 'Strict'
     };
 
     if (process.env.NODE_ENV === 'production') {
@@ -67,10 +66,8 @@ const sendTokenResponse = async (user, statusCode, res) => {
 async function createAndStoreOtp(userId) {
     const otp = crypto.randomInt(100000, 1000000).toString();
     
-    // Delete any existing OTP for this user
     await otpSchema.deleteOne({ userId });
 
-    // Hash OTP before storing
     const salt = await bcrypt.genSalt(10);
     const hashedOtp = await bcrypt.hash(otp, salt);
 
@@ -78,7 +75,6 @@ async function createAndStoreOtp(userId) {
     return otp;
 }
 
-// HELPER: Validate OTP with attempt tracking
 async function validateOtp(userId, passedOtp) {
     const otpDoc = await otpSchema.findOne({ userId });
     if (!otpDoc) throw { status: 400, message: "No OTP found. Please request a new one." };
@@ -101,7 +97,6 @@ async function validateOtp(userId, passedOtp) {
 
 module.exports.register = async (req, res) => {
     try {
-        // POST FOR - REGISTER
         const { email, password } = loginSchema.parse(req.body);
 
         const existingUser = await Developer.findOne({ email });
@@ -148,7 +143,6 @@ module.exports.login = async (req, res) => {
 
 module.exports.changePassword = async (req, res) => {
     try {
-        // POST FOR - CHANGE PASSWORD
         const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
 
         const dev = await Developer.findById(req.user._id);
@@ -173,7 +167,6 @@ module.exports.changePassword = async (req, res) => {
 
 module.exports.deleteAccount = async (req, res) => {
     try {
-        // POST FOR - DELETE ACCOUNT
         const { password } = deleteAccountSchema.parse(req.body);
 
         const dev = await Developer.findById(req.user._id);
@@ -216,7 +209,6 @@ module.exports.sendOtp = async (req, res) => {
 
 module.exports.verifyOtp = async (req, res) => {
     try {
-        // POST FOR - VERIFY OTP
         const { email, otp } = verifyOtpSchema.parse(req.body);
 
         const existingUser = await Developer.findOne({ email });
@@ -244,7 +236,6 @@ module.exports.forgotPassword = async (req, res) => {
         const { email } = onlyEmailSchema.parse(req.body);
 
         const dev = await Developer.findOne({ email });
-        // Return same message regardless of whether email exists (prevents user enumeration)
         if (!dev) return res.status(200).json({ message: "If this email is registered, an OTP has been sent." });
 
         const otp = await createAndStoreOtp(dev._id);
@@ -262,7 +253,6 @@ module.exports.forgotPassword = async (req, res) => {
 // RESET PASSWORD
 module.exports.resetPassword = async (req, res) => {
     try {
-        // POST FOR - RESET PASSWORD
         const { email, otp, newPassword } = resetPasswordSchema.parse(req.body);
 
         const dev = await Developer.findOne({ email });
@@ -270,7 +260,6 @@ module.exports.resetPassword = async (req, res) => {
 
         const otpDoc = await validateOtp(dev._id, otp);
 
-        // UPDATE PASSWORD
         await otpDoc.deleteOne();
         const salt = await bcrypt.genSalt(10);
         dev.password = await bcrypt.hash(newPassword, salt);

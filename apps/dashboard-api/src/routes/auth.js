@@ -26,34 +26,29 @@ const dashboardLimiter = rateLimit({
 });
 
 
-// REGISTER ROUTE
 router.post('/register', authLimiter, register);
 
-// LOGIN ROUTE
 router.post('/login', authLimiter, login);
 
-// Apply more relaxed dashboard limiter to the rest
 router.use(dashboardLimiter);
 
-// CHANGE PASSWORD (Protected)
 router.put('/change-password', authorization, changePassword);
 
-// DELETE ACCOUNT (Protected - Danger Zone)
 router.delete('/delete-account', authorization, deleteAccount);
 
-// OTP (email verification)
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 
-// PASSWORD RESET (FIX 5)
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 
-// REFRESH & LOGOUT
 router.post('/refresh-token', refreshToken);
 router.post('/logout', authorization, logout);
 
-// GET ME
 router.get('/me', authorization, getMe);
+
+router.get('/csrf-token', (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+});
 
 module.exports = router;
