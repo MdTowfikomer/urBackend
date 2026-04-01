@@ -14,6 +14,7 @@ const cors = require('cors')
 const cookieParser = require('cookie-parser');
 const csurf = require('csurf');
 const rateLimit = require('express-rate-limit');
+const standardizeApiResponse = require('./middlewares/standardizeApiResponse');
 const app = express();
 app.set('trust proxy', 1);
 const {garbageCollect, storageGarbageCollect, getPublicIp} = require('@urbackend/common');
@@ -58,6 +59,7 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(standardizeApiResponse);
 
 app.use(cookieParser());
 
