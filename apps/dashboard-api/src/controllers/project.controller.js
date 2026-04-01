@@ -23,11 +23,7 @@ const {
   getProjectById,
   deleteProjectById,
 } = require("@urbackend/common");
-const {
-  isProjectStorageExternal,
-  isProjectDbExternal,
-  getBucket,
-} = require("@urbackend/common");
+const { isProjectStorageExternal, getBucket } = require("@urbackend/common");
 const { getPublicIp } = require("@urbackend/common");
 const { clearCompiledModel } = require("@urbackend/common");
 const { createUniqueIndexes } = require("@urbackend/common");
@@ -179,8 +175,9 @@ module.exports.createProject = async (req, res) => {
 
     res.status(201).json(projectObj);
   } catch (err) {
-    if (err instanceof z.ZodError)
-      return res.status(400).json({ error: err.errors });
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.issues });
+    }
     res.status(500).json({ error: err.message });
   }
 };
@@ -394,13 +391,8 @@ module.exports.updateExternalConfig = async (req, res) => {
       .status(200)
       .json({ message: "External configuration updated successfully." });
   } catch (err) {
-    if (err.name === "ZodError") {
-      return res.status(400).json({
-        error:
-          err.errors?.[0]?.message ||
-          err.issues?.[0]?.message ||
-          "Validation failed",
-      });
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.issues });
     }
 
     console.error("External Config Error:", err);
@@ -459,9 +451,9 @@ module.exports.deleteExternalStorageConfig = async (req, res) => {
     project.resources.storage.isExternal = false;
     project.resources.storage.config = null;
 
-    await deleteProjectById(projectId);
-    await setProjectById(projectId, project);
     await project.save();
+    await deleteProjectById(projectId);
+    await setProjectById(projectId, project.toObject());
 
     res
       .status(200)
@@ -478,6 +470,7 @@ module.exports.createCollection = async (req, res) => {
   let compiledCollectionName;
   let collectionWasPersisted = false;
   let collectionNameForRollback;
+  let collectionExistedBefore = false;
 
   try {
     const { projectId, collectionName, schema } = createCollectionSchema.parse(
@@ -513,31 +506,33 @@ module.exports.createCollection = async (req, res) => {
       ? collectionName
       : `${project._id}_${collectionName}`;
 
-    project.collections.push({
+    const newCollectionConfig = {
       name: collectionName,
       model: schema,
       rls: getDefaultRlsForCollection(collectionName, schema),
-    });
+    };
+
+    project.collections.push(newCollectionConfig);
     await project.save();
     collectionWasPersisted = true;
 
-    const collectionConfig = project.collections.find(
-      (c) => c.name === collectionName,
-    );
-
     connection = await getConnection(projectId);
+
+    collectionExistedBefore = await connection.db
+      .listCollections({ name: compiledCollectionName }, { nameOnly: true })
+      .hasNext();
 
     const Model = getCompiledModel(
       connection,
-      collectionConfig,
+      newCollectionConfig,
       projectId,
       project.resources.db.isExternal,
     );
 
-    await createUniqueIndexes(Model, collectionConfig.model);
+    await createUniqueIndexes(Model, newCollectionConfig.model);
 
     await deleteProjectById(projectId);
-    await setProjectById(projectId, project);
+    await setProjectById(projectId, project.toObject());
     await deleteProjectByApiKeyCache(project.publishableKey);
     await deleteProjectByApiKeyCache(project.secretKey);
 
@@ -558,14 +553,17 @@ module.exports.createCollection = async (req, res) => {
 
       if (connection && compiledCollectionName) {
         clearCompiledModel(connection, compiledCollectionName);
-        await dropCollectionIfExists(connection, compiledCollectionName);
+
+        if (!collectionExistedBefore) {
+          await dropCollectionIfExists(connection, compiledCollectionName);
+        }
       }
     } catch (rollbackErr) {
       console.error("Create collection rollback failed:", rollbackErr);
     }
 
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: err.issues });
     }
 
     return res.status(400).json({ error: err.message });
@@ -607,7 +605,7 @@ module.exports.deleteCollection = async (req, res) => {
     await project.save();
 
     await deleteProjectById(projectId);
-    await setProjectById(projectId, project);
+    await setProjectById(projectId, project.toObject());
     await deleteProjectByApiKeyCache(project.publishableKey);
     await deleteProjectByApiKeyCache(project.secretKey);
 
@@ -637,7 +635,6 @@ module.exports.insertData = async (req, res) => {
       });
     }
 
-    const finalCollectionName = `${project._id}_${collectionName}`;
     const incomingData = req.body;
 
     const collectionConfig = project.collections.find(
@@ -1058,7 +1055,7 @@ module.exports.updateAllowedDomains = async (req, res) => {
         .status(404)
         .json({ error: "Project not found or access denied." });
     await deleteProjectById(project._id.toString());
-    await setProjectById(project._id.toString(), project);
+    await setProjectById(project._id.toString(), project.toObject());
     await deleteProjectByApiKeyCache(project.publishableKey);
     await deleteProjectByApiKeyCache(project.secretKey);
 

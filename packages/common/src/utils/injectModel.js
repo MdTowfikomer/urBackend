@@ -67,20 +67,27 @@ function buildFieldDef(field) {
     required: !!field.required,
   };
 }
-
-function buildMongooseSchema(fieldsArray) {
-  const schemaDef = {};
-  fieldsArray.forEach((field) => {
-    const normalizeKey = (key) =>
-      String(key || "")
-        .replace(/\uFEFF/g, "")
-        .trim();
-    if (!normalizedKey) return;
-    schemaDef[normalizedKey] = buildFieldDef(field);
-  });
-  return new mongoose.Schema(schemaDef, { timestamps: true, strict: false });
+function normalizeKey(key) {
+  return String(key || "")
+    .replace(/\uFEFF/g, "")
+    .trim();
 }
 
+function buildMongooseSchema(fieldsArray = []) {
+  const schemaDef = {};
+
+  fieldsArray.forEach((field) => {
+    const normalizedKey = normalizeKey(field.key);
+    if (!normalizedKey) return;
+
+    schemaDef[normalizedKey] = buildFieldDef(field);
+  });
+
+  return new mongoose.Schema(schemaDef, {
+    timestamps: true,
+    strict: false,
+  });
+}
 function getCompiledModel(connection, collectionData, projectId, isExternal) {
   let collectionName = "";
 

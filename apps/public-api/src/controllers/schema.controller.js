@@ -58,6 +58,7 @@ module.exports.createSchema = async (req, res) => {
   let compiledCollectionName;
   let collectionWasPersisted = false;
   let collectionNameForRollback;
+  let collectionExistedBefore = false;
 
   try {
     const { name, fields } = createSchemaApiKeySchema.parse(req.body);
@@ -121,27 +122,33 @@ module.exports.createSchema = async (req, res) => {
       ? name
       : `${fullProject._id}_${name}`;
 
-    fullProject.collections.push({ name, model: transformedFields });
+    const newCollectionConfig = {
+      name,
+      model: transformedFields,
+    };
+
+    fullProject.collections.push(newCollectionConfig);
     await fullProject.save();
     collectionWasPersisted = true;
 
-    const collectionConfig = fullProject.collections.find(
-      (c) => c.name === name,
-    );
-
     connection = await getConnection(fullProject._id);
+
+    collectionExistedBefore = await connection.db
+      .listCollections({ name: compiledCollectionName }, { nameOnly: true })
+      .hasNext();
+
     const Model = getCompiledModel(
       connection,
-      collectionConfig,
+      newCollectionConfig,
       fullProject._id,
       fullProject.resources.db.isExternal,
     );
 
-    await createUniqueIndexes(Model, collectionConfig.model);
+    await createUniqueIndexes(Model, newCollectionConfig.model);
 
     // Clear redis cache
     await deleteProjectById(projectId.toString());
-    await setProjectById(projectId.toString(), fullProject);
+    await setProjectById(projectId.toString(), fullProject.toObject());
     await deleteProjectByApiKeyCache(fullProject.publishableKey);
     await deleteProjectByApiKeyCache(fullProject.secretKey);
     if (req.hashedApiKey) {
@@ -167,14 +174,17 @@ module.exports.createSchema = async (req, res) => {
 
       if (connection && compiledCollectionName) {
         clearCompiledModel(connection, compiledCollectionName);
-        await dropCollectionIfExists(connection, compiledCollectionName);
+
+        if (!collectionExistedBefore) {
+          await dropCollectionIfExists(connection, compiledCollectionName);
+        }
       }
     } catch (rollbackErr) {
       console.error("Create schema rollback failed:", rollbackErr);
     }
 
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: err.issues });
     }
 
     console.error(err);
