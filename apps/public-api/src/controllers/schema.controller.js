@@ -84,15 +84,32 @@ module.exports.createSchema = async (req, res) => {
       fullProject.jwtSecret = generateApiKey("jwt_");
     }
 
+    const UNIQUE_SUPPORTED_TYPES = new Set([
+      "String",
+      "Number",
+      "Boolean",
+      "Date",
+    ]);
     // Recursive field transformer (API uses 'name', internal uses 'key')
-    function transformField(f) {
+    function transformField(f, depth = 0) {
       const mappedType =
         f.type.charAt(0).toUpperCase() + f.type.slice(1).toLowerCase();
+
+      const wantsUnique = f.unique === true;
+      const isTopLevel = depth === 0;
+      const isSupportedUniqueType = UNIQUE_SUPPORTED_TYPES.has(mappedType);
+
+      if (wantsUnique && (!isTopLevel || !isSupportedUniqueType)) {
+        throw new Error(
+          `Field '${f.name}' can only use unique=true on top-level String, Number, Boolean, or Date fields.`,
+        );
+      }
+
       const mapped = {
         key: f.name,
         type: mappedType,
         required: f.required === true,
-        unique: f.unique === true,
+        unique: wantsUnique,
       };
 
       if (f.ref) mapped.ref = f.ref;
@@ -105,12 +122,14 @@ module.exports.createSchema = async (req, res) => {
         };
 
         if (f.items.fields) {
-          mapped.items.fields = f.items.fields.map((sf) => transformField(sf));
+          mapped.items.fields = f.items.fields.map((sf) =>
+            transformField(sf, depth + 1),
+          );
         }
       }
 
       if (f.fields) {
-        mapped.fields = f.fields.map((sf) => transformField(sf));
+        mapped.fields = f.fields.map((sf) => transformField(sf, depth + 1));
       }
 
       return mapped;

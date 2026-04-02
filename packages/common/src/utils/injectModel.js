@@ -15,7 +15,10 @@ function buildFieldDef(field) {
   if (field.type === "Object" && field.fields && field.fields.length > 0) {
     const subSchema = {};
     field.fields.forEach((f) => {
-      subSchema[f.key] = buildFieldDef(f);
+      const normalizedKey = normalizeKey(f.key);
+      if (!normalizedKey) return;
+
+      subSchema[normalizedKey] = buildFieldDef(f);
     });
     return { type: subSchema, required: !!field.required };
   }
@@ -36,7 +39,10 @@ function buildFieldDef(field) {
     ) {
       const subSchema = {};
       field.items.fields.forEach((f) => {
-        subSchema[f.key] = buildFieldDef(f);
+        const normalizedKey = normalizeKey(f.key);
+        if (!normalizedKey) return;
+
+        subSchema[normalizedKey] = buildFieldDef(f);
       });
       return { type: [subSchema], required: !!field.required };
     }
