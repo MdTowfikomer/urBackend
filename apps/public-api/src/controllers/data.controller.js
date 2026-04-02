@@ -12,7 +12,7 @@ const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 // INSERT DATA
 module.exports.insertData = async (req, res) => {
     try {
-        console.time("insert data")
+        if (process.env.DEBUG === 'true') console.time("insert data")
         const { collectionName } = req.params;
         const project = req.project;
 
@@ -48,7 +48,7 @@ module.exports.insertData = async (req, res) => {
             );
         }
 
-        console.timeEnd("insert data")
+        if (process.env.DEBUG === 'true') console.timeEnd("insert data")
         res.status(201).json(result);
     } catch (err) {
         console.error(err);
@@ -59,7 +59,7 @@ module.exports.insertData = async (req, res) => {
 // GET ALL DATA
 module.exports.getAllData = async (req, res) => {
     try {
-        console.time("getall")
+        if (process.env.DEBUG === 'true') console.time("getall")
         const { collectionName } = req.params;
         const project = req.project;
 
@@ -75,7 +75,7 @@ module.exports.getAllData = async (req, res) => {
             .paginate();
 
         const data = await features.query.lean();
-        console.timeEnd("getall")
+        if (process.env.DEBUG === 'true') console.timeEnd("getall")
         res.json(data);
     } catch (err) {
         console.error(err);
