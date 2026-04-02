@@ -27,6 +27,7 @@ const { emailQueue } = require('./queues/emailQueue');
 const checkAuthEnabled = require('./middleware/checkAuthEnabled')
 const verifyEmail = require('./middleware/verifyEmail')
 const loadProjectForAdmin = require('./middleware/loadProjectForAdmin')
+const standardizeApiResponse = require('./middleware/standardizeApiResponse')
 
 // Utils
 const { sendOtp, sendReleaseEmail, sendAuthOtpEmail } = require('./utils/emailService');
@@ -108,6 +109,7 @@ module.exports = {
   verifyEmail,
   validateEnv,
   loadProjectForAdmin,
+  standardizeApiResponse,
   setProjectByApiKeyCache,
   getProjectByApiKeyCache,
   deleteProjectByApiKeyCache,

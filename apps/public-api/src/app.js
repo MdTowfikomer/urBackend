@@ -12,10 +12,9 @@ const express = require('express')
 const mongoose = require('mongoose')
 const cors = require('cors')
 const cookieParser = require('cookie-parser');
-const standardizeApiResponse = require('./middlewares/standardizeApiResponse');
 const app = express();
 app.set('trust proxy', 1);
-const { garbageCollect, storageGarbageCollect, getPublicIp } = require('@urbackend/common');
+const { garbageCollect, storageGarbageCollect, getPublicIp, standardizeApiResponse } = require('@urbackend/common');
 const { capture } = require('@kiroo/sdk');
 
 

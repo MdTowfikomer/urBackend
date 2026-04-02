@@ -14,10 +14,9 @@ const cors = require('cors')
 const cookieParser = require('cookie-parser');
 const csurf = require('csurf');
 const rateLimit = require('express-rate-limit');
-const standardizeApiResponse = require('./middlewares/standardizeApiResponse');
 const app = express();
 app.set('trust proxy', 1);
-const {garbageCollect, storageGarbageCollect, getPublicIp} = require('@urbackend/common');
+const {garbageCollect, storageGarbageCollect, getPublicIp, standardizeApiResponse} = require('@urbackend/common');
 const { capture } = require('@kiroo/sdk');
 
 const { emailQueue, authEmailQueue } = require('@urbackend/common');
