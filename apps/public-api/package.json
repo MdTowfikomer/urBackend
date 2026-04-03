@@ -11,6 +11,9 @@
   "jest": {
     "testEnvironment": "node"
   },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
   "dependencies": {
     "@urbackend/common": "*",
     "@kiroo/sdk": "^0.1.2",

@@ -302,6 +302,24 @@ describe('storage.controller', () => {
             });
         });
 
+        test('skips storageUsed reset for external provider during deleteAllFiles', async () => {
+            isProjectStorageExternal.mockReturnValue(true);
+
+            mockStorageFrom.list
+                .mockResolvedValueOnce({ data: [{ name: 'file1.txt' }], error: null })
+                .mockResolvedValueOnce({ data: [], error: null });
+
+            mockStorageFrom.remove.mockResolvedValue({ data: [{}], error: null });
+
+            const req = { project: makeProject() };
+            const res = makeRes();
+
+            await storageController.deleteAllFiles(req, res);
+
+            expect(Project.updateOne).not.toHaveBeenCalled();
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ provider: 'external' }));
+        });
+
         test('returns 500 when Supabase remove fails during deleteAllFiles', async () => {
             isProjectStorageExternal.mockReturnValue(false);
             mockStorageFrom.list.mockResolvedValue({ data: [{ name: 'file1.txt' }], error: null });
