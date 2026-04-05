@@ -1128,7 +1128,8 @@ module.exports.updateProject = async (req, res) => {
     await deleteProjectByApiKeyCache(project.publishableKey);
     await deleteProjectByApiKeyCache(project.secretKey);
 
-    res.json(project);
+    res.json(sanitizeProjectResponse(project.toObject()));
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1343,7 +1344,7 @@ module.exports.toggleAuth = async (req, res) => {
 /**
  * Updates GitHub/Google OAuth provider settings for a project.
  * Preserves existing encrypted client secrets when not provided in the update.
- * `@route` PATCH /api/projects/:projectId/auth/providers
+ * @route PUT /api/projects/:projectId/auth-providers
  */
 module.exports.updateAuthProviders = async (req, res) => {
   try {
