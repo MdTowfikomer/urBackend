@@ -638,7 +638,6 @@ module.exports.startSocialAuth = async (req, res) => {
 /**
  * Handles the OAuth provider callback. Validates state, exchanges code, resolves/creates user,
  * issues auth tokens, and redirects to the frontend callback URL.
- * Access token is in the URL fragment (#token=...) to avoid server log exposure.
  * @route GET /api/userAuth/social/:provider/callback
  */
 module.exports.handleSocialAuthCallback = async (req, res) => {
@@ -722,15 +721,13 @@ module.exports.handleSocialAuthCallback = async (req, res) => {
 
         const callbackBaseUrl = parsedState.callbackUrl || getFrontendCallbackBaseUrl(project);
         const callbackUrl = new URL(callbackBaseUrl);
+        callbackUrl.searchParams.set('token', issuedTokens.accessToken);
         callbackUrl.searchParams.set('rtCode', rtCode);
         callbackUrl.searchParams.set('provider', provider);
         callbackUrl.searchParams.set('userId', String(user._id));
         callbackUrl.searchParams.set('projectId', String(project._id));
         callbackUrl.searchParams.set('isNewUser', String(isNewUser));
         callbackUrl.searchParams.set('linkedByEmail', String(linkedByEmail));
-        const fragmentParams = new URLSearchParams();
-        fragmentParams.set('token', issuedTokens.accessToken);
-        callbackUrl.hash = fragmentParams.toString();
 
         return res.redirect(callbackUrl.toString());
     } catch (err) {
