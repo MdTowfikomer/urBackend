@@ -10,7 +10,7 @@ Main apps:
 - `apps/web-dashboard`: React/Vite dashboard
 - `packages/common`: shared models, validation, middleware, encryption, DB/model utilities
 
-Workspace scripts are defined in [package.json](/E:/Majors/WEB/urBackend/package.json).
+Workspace scripts are defined in [package.json](/package.json).
 
 ## Important project rules
 
@@ -46,12 +46,12 @@ Implemented providers:
 - Google
 
 Key files:
-- [Project.js](/E:/Majors/WEB/urBackend/packages/common/src/models/Project.js)
-- [project.controller.js](/E:/Majors/WEB/urBackend/apps/dashboard-api/src/controllers/project.controller.js)
-- [userAuth.controller.js](/E:/Majors/WEB/urBackend/apps/public-api/src/controllers/userAuth.controller.js)
-- [Auth.jsx](/E:/Majors/WEB/urBackend/apps/web-dashboard/src/pages/Auth.jsx)
-- [AuthCallback.jsx](/E:/Majors/WEB/urBackend/apps/web-dashboard/src/pages/AuthCallback.jsx)
-- [ProjectSettings.jsx](/E:/Majors/WEB/urBackend/apps/web-dashboard/src/pages/ProjectSettings.jsx)
+- [Project.js](/packages/common/src/models/Project.js)
+- [project.controller.js](/apps/dashboard-api/src/controllers/project.controller.js)
+- [userAuth.controller.js](/apps/public-api/src/controllers/userAuth.controller.js)
+- [Auth.jsx](/apps/web-dashboard/src/pages/Auth.jsx)
+- [AuthCallback.jsx](/apps/web-dashboard/src/pages/AuthCallback.jsx)
+- [ProjectSettings.jsx](/apps/web-dashboard/src/pages/ProjectSettings.jsx)
 
 Behavior:
 - Start route requires `x-api-key` and enabled auth.
