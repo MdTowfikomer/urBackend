@@ -11,7 +11,7 @@ module.exports = async (req, res, next) => {
         // fall back to ?key= query param but only allow publishable keys via query to avoid
         // secret key exposure in server access logs.
         const headerKey = req.header('x-api-key');
-        const queryKey = req.query.key && !String(req.query.key).startsWith('sk_live_')
+        const queryKey = req.query.key && !String(req.query.key).startsWith('sk_')
             ? req.query.key
             : undefined;
         const apiKey = headerKey || queryKey;
