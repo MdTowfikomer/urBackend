@@ -1104,7 +1104,14 @@ module.exports.updateProject = async (req, res) => {
       if (typeof resendFromEmail !== "string") {
         return res.status(400).json({ error: "resendFromEmail must be a string." });
       }
-      updateFields.resendFromEmail = resendFromEmail.trim();
+      const trimmedFrom = resendFromEmail.trim();
+      if (trimmedFrom !== "") {
+         const senderRegex = /^(?:.*<)?[^\s@]+@[^>\s@]+\.[^>\s@]+(?:>)?$/;
+         if (!senderRegex.test(trimmedFrom)) {
+            return res.status(400).json({ error: "resendFromEmail must be a valid format (e.g., 'me@domain.com' or 'App <me@domain.com>')." });
+         }
+      }
+      updateFields.resendFromEmail = trimmedFrom;
     }
     if (siteUrl !== undefined) {
       if (siteUrl !== "" && typeof siteUrl !== "string") {

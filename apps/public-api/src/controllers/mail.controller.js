@@ -47,6 +47,7 @@ const reserveMonthlyMailSlot = async (projectId, limit) => {
 };
 
 module.exports.sendMail = async (req, res) => {
+  let consumedQuotaKey = null;
   try {
     if (req.keyRole !== "secret") {
       return res.status(403).json({
@@ -62,7 +63,8 @@ module.exports.sendMail = async (req, res) => {
     }
 
     const limit = getMonthlyMailLimit(req.project);
-    const { count } = await reserveMonthlyMailSlot(projectId, limit);
+    const { count, key } = await reserveMonthlyMailSlot(projectId, limit);
+    consumedQuotaKey = key;
 
     const project = await loadProjectMailConfig(projectId);
     if (!project) {
@@ -112,6 +114,10 @@ module.exports.sendMail = async (req, res) => {
       message: "Mail sent successfully.",
     });
   } catch (err) {
+    if (consumedQuotaKey) {
+      await redis.decr(consumedQuotaKey).catch(() => {});
+    }
+
     if (err instanceof z.ZodError) {
       return res.status(400).json({
         error: err.issues?.[0]?.message || "Invalid mail payload.",
