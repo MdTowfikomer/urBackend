@@ -151,5 +151,6 @@ module.exports = {
   validateData,
   validateUpdateData,
   userSignupSchema,
+  initAuthEmailWorker,
   ...sessionManager,
 };
