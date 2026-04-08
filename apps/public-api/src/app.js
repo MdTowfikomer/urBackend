@@ -22,10 +22,12 @@ const { capture } = require('@kiroo/sdk');
 const {emailQueue} = require('@urbackend/common');
 const {authEmailQueue} = require('@urbackend/common');
 const {initWebhookWorker} = require('@urbackend/common');
+const {initAuthEmailWorker} = require('@urbackend/common');
 
 // Initialize webhook worker
 if (process.env.NODE_ENV !== 'test') {
     initWebhookWorker();
+    initAuthEmailWorker();
 }
 
 app.use(express.json());

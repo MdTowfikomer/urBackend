@@ -7,8 +7,13 @@ const { decrypt } = require('../utils/encryption');
 // Create the email queue specifically for fast OTPs
 const authEmailQueue = new Queue('auth-email-queue', { connection });
 
-// Initialize Worker with Rate Limiting
-const worker = new Worker('auth-email-queue', async (job) => {
+let worker = null;
+
+const initAuthEmailWorker = () => {
+    if (worker) return worker;
+
+    // Initialize Worker with Rate Limiting
+    worker = new Worker('auth-email-queue', async (job) => {
     const { email, otp, type, pname, projectId } = job.data;
     const redact = (e) => e.replace(/(.{2})(.*)(?=@)/, (gp1, gp2, gp3) => gp2 + "*".repeat(gp3.length));
     const maskedEmail = redact(email);
@@ -51,8 +56,11 @@ worker.on('completed', (job) => {
     console.log(`[Queue] Job ${job.id} completed successfully`);
 });
 
-worker.on('failed', (job, err) => {
-    console.error(`[Queue] Job ${job.id} failed:`, err);
-});
+    worker.on('failed', (job, err) => {
+        console.error(`[Queue] Job ${job.id} failed:`, err);
+    });
 
-module.exports = { authEmailQueue };
+    return worker;
+};
+
+module.exports = { authEmailQueue, initAuthEmailWorker };

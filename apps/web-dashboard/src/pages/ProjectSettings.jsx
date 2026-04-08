@@ -304,7 +304,7 @@ export default function ProjectSettings() {
               Default Sent-From Address
             </label>
             <input
-              type="email"
+              type="text"
               className="input-field"
               placeholder="e.g. Acme <info@acme.com>"
               value={resendFromEmailValue}

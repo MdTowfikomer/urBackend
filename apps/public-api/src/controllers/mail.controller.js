@@ -14,7 +14,7 @@ const getMailCountKey = (projectId, monthKey) =>
 
 const loadProjectMailConfig = async (projectId) => {
   return Project.findById(projectId)
-    .select("+resendApiKey.encrypted +resendApiKey.iv +resendApiKey.tag")
+    .select("+resendApiKey.encrypted +resendApiKey.iv +resendApiKey.tag resendFromEmail")
     .lean();
 };
 
@@ -62,16 +62,17 @@ module.exports.sendMail = async (req, res) => {
       return res.status(401).json({ error: "Project context missing." });
     }
 
-    const limit = getMonthlyMailLimit(req.project);
-    const { count, key } = await reserveMonthlyMailSlot(projectId, limit);
-    consumedQuotaKey = key;
-
     const project = await loadProjectMailConfig(projectId);
     if (!project) {
       return res.status(404).json({ error: "Project not found." });
     }
 
-    const decryptedByokKey = decrypt(project.resendApiKey);
+    const encryptedByokKey =
+      project.resendApiKey && typeof project.resendApiKey === "object" && Object.keys(project.resendApiKey).length > 0
+        ? project.resendApiKey
+        : null;
+    const decryptedByokKey = encryptedByokKey ? decrypt(encryptedByokKey) : null;
+
     const usingByok = typeof decryptedByokKey === "string" && decryptedByokKey.trim().length > 0;
     const clientKey = usingByok
       ? decryptedByokKey.trim()
@@ -80,6 +81,10 @@ module.exports.sendMail = async (req, res) => {
     if (!clientKey) {
       return res.status(500).json({ error: "Resend API key is not configured." });
     }
+
+    const limit = getMonthlyMailLimit(req.project);
+    const { count, key } = await reserveMonthlyMailSlot(projectId, limit);
+    consumedQuotaKey = key;
 
     const resend = new Resend(clientKey);
     

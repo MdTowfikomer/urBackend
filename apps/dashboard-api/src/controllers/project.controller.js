@@ -1160,7 +1160,7 @@ module.exports.updateProject = async (req, res) => {
       { $set: updateFields },
       {
         new: true,
-        select:
+        projection:
           "+resendApiKey.encrypted +resendApiKey.iv +resendApiKey.tag",
       },
     );

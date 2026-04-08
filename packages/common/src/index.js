@@ -22,7 +22,8 @@ const Webhook = require("./models/Webhook");
 const WebhookDelivery = require("./models/WebhookDelivery");
 
 // Queues
-const { authEmailQueue } = require("./queues/authEmailQueue");
+const { authEmailQueue,
+  initAuthEmailWorker, initAuthEmailWorker } = require("./queues/authEmailQueue");
 const { emailQueue } = require("./queues/emailQueue");
 const {
   webhookQueue,
