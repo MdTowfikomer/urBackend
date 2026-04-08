@@ -9,6 +9,7 @@
 * [Schema Creation 🧱](docs/schemas.md)
 * [Cloud Storage ☁️](docs/storage.md)
 * [Security & Keys 🛡️](docs/security.md)
+* [Webhooks 🪝](docs/WEBHOOKS.md)
 
 ---
 ## Project & Community 🤝
