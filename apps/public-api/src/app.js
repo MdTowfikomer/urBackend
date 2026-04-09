@@ -79,7 +79,7 @@ app.use('/api/data', projectCorsPreflight, limiter, logger, dataRoute);
 app.use('/api/schemas', projectCorsPreflight, limiter, logger, schemaRoute);
 app.use('/api/storage', projectCorsPreflight, limiter, logger, storageRoute);
 app.use('/api/mail', projectCorsPreflight, limiter, logger, mailRoute);
-app.use('/api/health', healthRoute);
+app.use('/api/health', limiter, logger, healthRoute);
 
 app.get('/api/server-ip', async (req, res) => {
     const ip = await getPublicIp();

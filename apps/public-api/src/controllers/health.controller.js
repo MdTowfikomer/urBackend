@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { redis } = require('@urbackend/common');
+const REDIS_PING_TIMEOUT_MS = 500;
 
 const getHealth = async (req, res) => {
     const isMongoConnected = mongoose.connection.readyState === 1;
@@ -7,7 +8,10 @@ const getHealth = async (req, res) => {
     let isRedisConnected = false;
     if (redis?.status === 'ready' && typeof redis.ping === 'function') {
         try {
-            const pingResponse = await redis.ping();
+            const pingResponse = await Promise.race([
+                redis.ping(),
+                new Promise((resolve) => setTimeout(() => resolve('TIMEOUT'), REDIS_PING_TIMEOUT_MS)),
+            ]);
             isRedisConnected = pingResponse === 'PONG';
         } catch (_error) {
             isRedisConnected = false;
