@@ -26,6 +26,32 @@ const SOCIAL_STATE_TTL_SECONDS = 600;
 const SOCIAL_REFRESH_EXCHANGE_TTL_SECONDS = 60;
 
 /**
+ * Checks if a public OTP cooldown is active for this email.
+ * @param {string} projectId 
+ * @param {string} email 
+ * @param {string} type 
+ */
+const checkPublicOtpCooldown = async (projectId, email, type = 'verification') => {
+    const cooldownKey = `project:${projectId}:otp:cooldown:${type}:${email}`;
+    const exists = await redis.get(cooldownKey);
+    if (exists) {
+        const ttl = await redis.ttl(cooldownKey);
+        const err = new Error(`Please wait ${ttl} seconds before requesting another code.`);
+        err.statusCode = 429;
+        throw err;
+    }
+};
+
+/**
+ * Sets a 60s cooldown for OTP requests to prevent spam.
+ */
+const setPublicOtpCooldown = async (projectId, email, type = 'verification') => {
+    const cooldownKey = `project:${projectId}:otp:cooldown:${type}:${email}`;
+    await redis.set(cooldownKey, '1', 'EX', 60);
+};
+
+
+/**
  * Returns the public API base URL from env or defaults to localhost.
  * @returns {string}
  */
@@ -923,6 +949,37 @@ module.exports.signup = async (req, res) => {
 
         const existingUser = await Model.findOne({ email });
         if (existingUser) {
+            // Check if user is unverified. If so, we can trigger a resend instead of a hard error.
+            const verificationField = getVerificationField(usersColConfig);
+            const isVerified = verificationField ? !!existingUser[verificationField] : true;
+
+            if (!isVerified) {
+                // Check cooldown
+                try {
+                    await checkPublicOtpCooldown(project._id, email, 'verification');
+                } catch (cooldownErr) {
+                    return res.status(cooldownErr.statusCode || 429).json({ error: cooldownErr.message });
+                }
+
+                const otp = Math.floor(100000 + Math.random() * 900000).toString();
+                await redis.set(`project:${project._id}:otp:verification:${email}`, otp, 'EX', 300);
+                await setPublicOtpCooldown(project._id, email, 'verification');
+
+                await authEmailQueue.add('send-verification-email', {
+                    email,
+                    otp,
+                    type: 'verification',
+                    pname: project.name,
+                    projectId: String(project._id)
+                });
+
+                return res.status(200).json({
+                    success: true,
+                    message: "User already exists but is unverified. A new verification code has been sent.",
+                    userId: existingUser._id
+                });
+            }
+
             return res.status(400).json({ error: "User already exists with this email." });
         }
 
@@ -942,6 +999,7 @@ module.exports.signup = async (req, res) => {
         const result = await Model.create(newUserPayload);
 
         await redis.set(`project:${project._id}:otp:verification:${email}`, otp, 'EX', 300);
+        await setPublicOtpCooldown(project._id, email, 'verification');
 
         await authEmailQueue.add('send-verification-email', {
             email,
@@ -950,6 +1008,7 @@ module.exports.signup = async (req, res) => {
             pname: project.name,
             projectId: String(project._id)
         });
+
 
         const issuedTokens = await issueAuthTokens({
             project,
@@ -1196,6 +1255,55 @@ module.exports.verifyEmail = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
+// RESEND VERIFICATION OTP
+module.exports.resendVerificationOtp = async (req, res) => {
+    try {
+        const project = req.project;
+        const { email } = onlyEmailSchema.parse(req.body);
+
+        const { usersColConfig, Model } = await getUsersModel(project);
+        if (!Model) return res.status(404).json({ error: "Auth collection not found" });
+
+        const user = await Model.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ error: "User not found with this email." });
+        }
+
+        const verificationField = getVerificationField(usersColConfig);
+        const isVerified = verificationField ? !!user[verificationField] : true;
+
+        if (isVerified) {
+            return res.status(400).json({ error: "Email is already verified." });
+        }
+
+        // Check cooldown
+        try {
+            await checkPublicOtpCooldown(project._id, email, 'verification');
+        } catch (cooldownErr) {
+            return res.status(cooldownErr.statusCode || 429).json({ error: cooldownErr.message });
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        await redis.set(`project:${project._id}:otp:verification:${email}`, otp, 'EX', 300);
+        await setPublicOtpCooldown(project._id, email, 'verification');
+
+        await authEmailQueue.add('send-verification-email', {
+            email,
+            otp,
+            type: 'verification',
+            pname: project.name,
+            projectId: String(project._id)
+        });
+
+        res.json({ message: "Verification code sent successfully." });
+
+    } catch (err) {
+        if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+        res.status(500).json({ error: err.message });
+    }
+};
+
 
 // POST REQ FOR PASSWORD RESET REQUEST
 module.exports.requestPasswordReset = async (req, res) => {

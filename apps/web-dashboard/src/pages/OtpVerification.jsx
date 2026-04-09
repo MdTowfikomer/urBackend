@@ -27,7 +27,7 @@ function OtpVerification() {
             toast.promise(sendOtpPromise, {
                 loading: 'Sending OTP...',
                 success: 'OTP sent to your email!',
-                error: 'Failed to send OTP'
+                error: (err) => err.response?.data?.error || 'Failed to send OTP'
             });
         }
     }, [email, navigate, user, authLoading]);
@@ -44,9 +44,9 @@ function OtpVerification() {
                 login(res.data.user);
             }
             navigate('/dashboard');
-        } catch {
+        } catch (err) {
             toast.dismiss(loadingToast);
-            toast.error('Verification failed');
+            toast.error(err.response?.data?.error || 'Verification failed');
         }
     };
 
@@ -56,9 +56,9 @@ function OtpVerification() {
             await api.post('/api/auth/send-otp', { email });
             toast.dismiss(loadingToast);
             toast.success('OTP sent successfully!');
-        } catch {
+        } catch (err) {
             toast.dismiss(loadingToast);
-            toast.error('Failed to send OTP');
+            toast.error(err.response?.data?.error || 'Failed to send OTP');
         }
     };
 

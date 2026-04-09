@@ -95,6 +95,17 @@ async function validateOtp(userId, passedOtp) {
     return otpDoc;
 }
 
+async function checkOtpCooldown(userId) {
+    const existingOtp = await Otp.findOne({ userId });
+    if (existingOtp) {
+        const secondsSinceCreated = (Date.now() - existingOtp.createdAt.getTime()) / 1000;
+        if (secondsSinceCreated < 60) {
+            const waitTime = Math.ceil(60 - secondsSinceCreated);
+            throw { status: 429, message: `Please wait ${waitTime} seconds before requesting a new OTP.` };
+        }
+    }
+}
+
 module.exports.register = async (req, res) => {
     try {
         const { email, password } = loginSchema.parse(req.body);
@@ -191,18 +202,40 @@ module.exports.sendOtp = async (req, res) => {
         const { email } = onlyEmailSchema.parse(req.body);
 
         const existingUser = await Developer.findOne({ email });
-        if (!existingUser) return res.status(400).json({ error: "User not found" });
+        if (!existingUser) {
+            return res.status(400).json({ error: "User not found. Ensure you are using the correct email." });
+        }
 
-        if (existingUser.isVerified) return res.status(400).json({ error: "User already verified" });
+        if (existingUser.isVerified) {
+            return res.status(400).json({ error: "Account is already verified. Please login." });
+        }
+
+        // Check 60s cooldown
+        try {
+            await checkOtpCooldown(existingUser._id);
+        } catch (cooldownErr) {
+            return res.status(cooldownErr.status || 429).json({ error: cooldownErr.message });
+        }
 
         const otp = await createAndStoreOtp(existingUser._id);
 
         await sendOtp(email, otp); // Send raw OTP to user's email
         res.json({ message: "OTP sent successfully" });
     } catch (err) {
-        if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
-        console.error(err);
-        res.status(500).json({ error: "Internal Server Error" });
+        if (err instanceof z.ZodError) {
+            return res.status(400).json({ 
+                error: "Invalid email format",
+                details: err.errors 
+            });
+        }
+        
+        console.error("🔥 Dashboard OTP Send Error:", {
+            email: req.body?.email,
+            error: err.message,
+            stack: err.stack
+        });
+
+        res.status(500).json({ error: "Failed to send OTP. Please try again later." });
     }
 }
 
@@ -240,7 +273,7 @@ module.exports.forgotPassword = async (req, res) => {
 
         const otp = await createAndStoreOtp(dev._id);
 
-        await sendOtp(email, otp, { subject: "Password Reset OTP — urBackend" });
+        await sendOtp(email, otp, { subject: "Password Reset OTP \u2014 urBackend" });
         res.status(200).json({ message: "If this email is registered, an OTP has been sent." });
     } catch (err) {
         if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });

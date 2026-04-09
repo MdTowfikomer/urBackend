@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const verifyApiKey = require('../middlewares/verifyApiKey');
 const {checkAuthEnabled} = require('@urbackend/common');
-const { signup, login, me, publicProfile, verifyEmail, requestPasswordReset, resetPasswordUser, updateProfile, changePasswordUser, refreshToken, logout, startSocialAuth, handleSocialAuthCallback, exchangeSocialRefreshToken } = require('../controllers/userAuth.controller');
+const { signup, login, me, publicProfile, verifyEmail, resendVerificationOtp, requestPasswordReset, resetPasswordUser, updateProfile, changePasswordUser, refreshToken, logout, startSocialAuth, handleSocialAuthCallback, exchangeSocialRefreshToken } = require('../controllers/userAuth.controller');
+
 
 // SIGNUP ROUTE
 router.post('/signup', verifyApiKey, checkAuthEnabled, signup);
@@ -20,6 +21,7 @@ router.get('/public/:username', verifyApiKey, checkAuthEnabled, publicProfile);
 
 // EMAIL VERIFICATION
 router.post('/verify-email', verifyApiKey, checkAuthEnabled, verifyEmail);
+router.post('/resend-verification-otp', verifyApiKey, checkAuthEnabled, resendVerificationOtp);
 
 // PASSWORD RESET
 router.post('/request-password-reset', verifyApiKey, checkAuthEnabled, requestPasswordReset);
