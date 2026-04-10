@@ -30,7 +30,7 @@ test('send() sends POST request to mail endpoint', async () => {
 
   const result = await client.mail.send(payload);
   
-  expect(result).toEqual(mockResponse);
+  expect(result).toEqual(mockResponse.data);
   expect(fetchMock).toHaveBeenCalledWith(
     expect.stringContaining('/api/mail/send'),
     expect.objectContaining({

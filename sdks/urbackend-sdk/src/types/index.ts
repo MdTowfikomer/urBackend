@@ -133,14 +133,10 @@ export interface SendMailPayload {
 }
 
 export interface SendMailResponse {
-  success: boolean;
-  data: {
-    id: string | null;
-    provider: 'byok' | 'default';
-    monthlyUsage: number;
-    monthlyLimit: number;
-  };
-  message: string;
+  id: string | null;
+  provider: 'byok' | 'default';
+  monthlyUsage: number;
+  monthlyLimit: number;
 }
 
 export interface UploadResponse {
