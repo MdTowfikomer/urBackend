@@ -4,7 +4,7 @@ description: "Manage user accounts, sessions, and social authentication with the
 keywords: ["auth", "authentication", "login", "signup", "sdk", "social auth", "oauth"]
 ---
 
-Access auth methods via `client.auth`. The module automatically stores the `accessToken` from `login()` or `refreshToken()` and uses it for subsequent authenticated requests like `me()` or `updateProfile()`.
+You can access auth methods via `client.auth`. When you call `login()` or `refreshToken()`, the module stores the `accessToken` and uses it for subsequent authenticated requests such as `me()` or `updateProfile()`.
 
 ## `signUp`
 
@@ -113,7 +113,7 @@ urBackend supports OAuth via GitHub and Google.
 
 ### `socialStart`
 
-Returns the URL to initiate the OAuth flow. Redirect your user's browser to this URL.
+You receive a URL to initiate the OAuth flow. Redirect your user's browser to this URL.
 
 ```typescript
 socialStart(provider: 'github' | 'google'): string
@@ -146,7 +146,7 @@ const { refreshToken } = await client.auth.socialExchange({ token, rtCode });
 
 ## Account verification
 
-Methods for handling email OTP flows.
+Use these methods to handle email OTP flows.
 
 | Method | Description |
 |---|---|
@@ -169,7 +169,7 @@ publicProfile(username: string): Promise<AuthUser>
 
 ## `logout`
 
-Revokes the current session on the server and clears the local token.
+Call this to revoke your current session on the server and clear the local token.
 
 ```typescript
 logout(token?: string): Promise<{ success: boolean; message: string }>
@@ -179,7 +179,7 @@ logout(token?: string): Promise<{ success: boolean; message: string }>
 
 ## Manual token management
 
-If you need to manage tokens manually (e.g., after social auth), use these helper methods:
+If you need to manage tokens manually (for example, after social auth), you can use these helper methods:
 
 - `getToken()`: Returns the current in-memory access token.
 - `setToken(token)`: Manually set the access token for the client.
