@@ -49,24 +49,24 @@ urBackend is an **Open-Source BaaS** built to eliminate the complexity of backen
 Go from zero to a live backend in **under 60 seconds**.
 
 1.  **Initialize**: Create a project on the [Dashboard](https://urbackend.bitbros.in).
-2.  **Model**: Visually define your collections and schemas.
-3.  **Execute**: Push and pull data immediately using your API key.
+2.  **Install**: `npm install @urbackend/sdk`
+3.  **Model**: Visually define your collections and schemas.
+4.  **Execute**: Push and pull data immediately using the SDK.
 
 ```javascript
-// Read data with a publishable key — safe to use in frontend code
-const res = await fetch('https://api.ub.bitbros.in/api/data/products', {
-  headers: { 'x-api-key': 'pk_live_...' }
-});
-const { data } = await res.json();
+import urBackend from '@urbackend/sdk';
 
-// Write data with a secret key — server-side only
-const writeRes = await fetch('https://api.ub.bitbros.in/api/data/products', {
-  method: 'POST',
-  headers: {
-    'x-api-key': 'sk_live_...',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ name: 'Widget', price: 9.99 })
+// Initialize with your API key
+const client = urBackend({ apiKey: 'YOUR_API_KEY' });
+
+// Read data (GET /api/data/products)
+const products = await client.db.getAll('products');
+
+// Write data (POST /api/data/products)
+// requires sk_live_* key or RLS enabled
+const product = await client.db.insert('products', { 
+  name: 'Widget', 
+  price: 9.99 
 });
 ```
 
@@ -106,23 +106,17 @@ RLS lets you safely allow frontend clients to write data without exposing your s
 **Example — user creates a post:**
 
 ```javascript
-// 1. User logs in to get their JWT
-const loginRes = await fetch('https://api.ub.bitbros.in/api/userAuth/login', {
-  method: 'POST',
-  headers: { 'x-api-key': 'pk_live_...', 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email: 'user@example.com', password: 'secret' })
+// 1. User logs in (POST /api/userAuth/login)
+const { accessToken } = await client.auth.login({ 
+  email: 'user@example.com', 
+  password: 'secret' 
 });
-const { token } = await loginRes.json();
 
-// 2. User creates a post — userId is auto-injected if omitted
-const postRes = await fetch('https://api.ub.bitbros.in/api/data/posts', {
-  method: 'POST',
-  headers: {
-    'x-api-key': 'pk_live_...',
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ title: 'Hello World', content: '...' })
+// 2. User creates a post (POST /api/data/posts)
+// accessToken is auto-handled by the SDK after login
+const post = await client.db.insert('posts', { 
+  title: 'Hello World', 
+  content: '...' 
 });
 // The saved document will include: { userId: '<logged-in user id>', title: 'Hello World', ... }
 ```
@@ -163,23 +157,13 @@ The frontend callback flow is:
 
 Callback example:
 
-```js
-const fragment = new URLSearchParams(window.location.hash.slice(1));
-const params = new URLSearchParams(window.location.search);
+```javascript
+// After redirect from provider (POST /api/userAuth/social/exchange)
+const token = new URLSearchParams(window.location.hash.slice(1)).get('token');
+const rtCode = new URLSearchParams(window.location.search).get('rtCode');
 
-const token = fragment.get('token');
-const rtCode = params.get('rtCode');
-
-const response = await fetch('/api/userAuth/social/exchange', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ token, rtCode })
-});
-
-const payload = await response.json();
-// Success shape: { success: true, data: { refreshToken }, message: 'Refresh token exchanged successfully' }
+const { refreshToken } = await client.auth.socialExchange({ token, rtCode });
+// Success shape: { refreshToken }
 ```
 
 GitHub and Google both support:
@@ -193,24 +177,28 @@ GitHub and Google both support:
 
 ## 👤 User Authentication
 
-User accounts are managed through `/api/userAuth/*` endpoints — **not** through the data API. Direct access to `/api/data/users*` is blocked for security.
+User accounts are managed through the SDK's `auth` module — **not** through the database API. Direct access to `/api/data/users*` is blocked for security.
 
 ```javascript
-// Sign up a new user
-POST /api/userAuth/signup
-{ "email": "user@example.com", "password": "secret", "name": "Alice" }
+// Sign up a new user (POST /api/userAuth/signup)
+await client.auth.signUp({ 
+  email: "user@example.com", 
+  password: "secret", 
+  name: "Alice" 
+});
 
-// Log in
-POST /api/userAuth/login
-{ "email": "user@example.com", "password": "secret" }
-// Returns: { token: "<jwt>", user: { ... } }
+// Log in (POST /api/userAuth/login)
+const { accessToken, user } = await client.auth.login({ 
+  email: "user@example.com", 
+  password: "secret" 
+});
 
-// Get current user profile (requires Bearer token)
-GET /api/userAuth/me
-Authorization: Bearer <token>
+// Get current user profile (GET /api/userAuth/me)
+// Uses the accessToken from the previous login automatically
+const me = await client.auth.me();
 ```
 
-Both endpoints require your `pk_live` key in `x-api-key`. See the [full auth docs](docs/introduction.md#authentication) for more.
+All auth methods require your `pk_live` key. See the [full auth docs](docs/introduction.md#authentication) for more.
 
 ---
 
@@ -256,3 +244,5 @@ Join hundreds of developers building faster without the backend headaches.
 </a>
 
 Built with ❤️ by the **urBackend** community.
+.
+.
