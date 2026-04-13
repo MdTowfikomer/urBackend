@@ -43,7 +43,7 @@ export default function Database() {
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [rlsEnabled, setRlsEnabled] = useState(false);
   const [rlsMode, setRlsMode] = useState("public-read");
-  const [rlsOwnerField] = useState("userId");
+  const [rlsOwnerField, setRlsOwnerField] = useState("userId");
   const [isRlsDialogOpen, setIsRlsDialogOpen] = useState(false);
 
   // ... (Keeping core logic: fetchProject, fetchData, handleSaveRls, etc. - mapped to new components)
@@ -74,6 +74,18 @@ export default function Database() {
     };
     fetchProject();
   }, [projectId, user, searchParams]);
+
+  // Sync RLS states with active collection
+  useEffect(() => {
+    if (activeCollection) {
+      setRlsEnabled(activeCollection.rls?.enabled || false);
+      setRlsMode(activeCollection.rls?.mode || 'public-read');
+      setRlsOwnerField(activeCollection.rls?.ownerField || 'userId');
+      
+      // Reset filters when switching collections to prevent invalid field queries
+      setQueryParams(p => ({ ...p, page: 1, filters: [] }));
+    }
+  }, [activeCollection]);
 
   const fetchData = useCallback(async () => {
     if (!activeCollection) return;
@@ -219,20 +231,96 @@ export default function Database() {
       {/* RLS Dialog */}
       {isRlsDialogOpen && (
         <div className="rls-dialog-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-          <div className="glass-card" style={{ width: '400px', padding: '1.5rem', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>RLS Settings</h3>
-              <X size={18} style={{ cursor: 'pointer' }} onClick={() => setIsRlsDialogOpen(false)} />
+          <div className="glass-card" style={{ width: '480px', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Shield size={20} color="var(--color-primary)" />
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Row Level Security (RLS)</h3>
+                </div>
+                <button 
+                  onClick={() => setIsRlsDialogOpen(false)} 
+                  className="btn-icon" 
+                  style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '50%', padding: '6px' }}
+                >
+                    <X size={18} />
+                </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                <input type="checkbox" checked={rlsEnabled} onChange={e => setRlsEnabled(e.target.checked)} /> Enable Security Rules
-              </label>
-              <select className="input-field" value={rlsMode} onChange={e => setRlsMode(e.target.value)} style={{ height: '36px' }}>
-                <option value="public-read">public-read (anyone can read)</option>
-                <option value="private">private (only owner can read)</option>
-              </select>
-              <button className="btn btn-primary" onClick={async () => { if (await handleSaveRls()) setIsRlsDialogOpen(false); }}>Save Rules</button>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              
+              <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      style={{ width: '18px', height: '18px' }}
+                      checked={rlsEnabled} 
+                      onChange={e => setRlsEnabled(e.target.checked)} 
+                    /> 
+                    Enable Rules for "{activeCollection?.name}"
+                  </label>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '6px', marginLeft: '28px' }}>
+                      When enabled, access to data is restricted based on the rules below.
+                  </p>
+              </div>
+
+              {rlsEnabled && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }} className="fade-in">
+                      <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase' }}>Security Mode</label>
+                          <select 
+                            className="input-field" 
+                            value={rlsMode} 
+                            onChange={e => setRlsMode(e.target.value)} 
+                            style={{ width: '100%', height: '40px', fontSize: '0.85rem' }}
+                          >
+                            <option value="public-read">Public Read (Anyone can read, Owner can write)</option>
+                            <option value="private">Private (Only Owner can read and write)</option>
+                          </select>
+                          <p style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginTop: '8px', lineHeight: 1.4 }}>
+                              {rlsMode === 'public-read' 
+                                ? '✓ Perfect for public content like blog posts or reviews. Users can read anything but only edit their own data.' 
+                                : '✓ Perfect for sensitive data like user profiles or personal notes. Only the creator can access the record.'}
+                          </p>
+                      </div>
+
+                      <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase' }}>Ownership Field</label>
+                          <select 
+                            className="input-field" 
+                            value={rlsOwnerField} 
+                            onChange={e => setRlsOwnerField(e.target.value)} 
+                            style={{ width: '100%', height: '40px', fontSize: '0.85rem' }}
+                          >
+                              <option value="userId">userId (Default)</option>
+                              {activeCollection?.model?.filter(f => f.type === 'STRING').map(f => (
+                                  <option key={f.key} value={f.key}>{f.key}</option>
+                              ))}
+                          </select>
+                          <p style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginTop: '8px' }}>
+                              The field in your document that stores the creator's user ID.
+                          </p>
+                      </div>
+                  </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '0.5rem' }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ flex: 1, height: '42px' }} 
+                    onClick={() => setIsRlsDialogOpen(false)}
+                  >
+                      Cancel
+                  </button>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ flex: 2, height: '42px' }} 
+                    onClick={async () => { 
+                        if (await handleSaveRls()) setIsRlsDialogOpen(false); 
+                    }}
+                  >
+                      Save Security Rules
+                  </button>
+              </div>
             </div>
           </div>
         </div>
