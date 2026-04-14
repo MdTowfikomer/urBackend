@@ -13,6 +13,7 @@ import { Database as DbIcon, FileText, Shield, X } from "lucide-react";
 
 import DatabaseHeader from "../components/Database/DatabaseHeader";
 import DatabaseFilter from "../components/Database/DatabaseFilter";
+import Pagination from "../components/Database/Pagination";
 
 export default function Database() {
   const { projectId } = useParams();
@@ -35,11 +36,12 @@ export default function Database() {
   const [editingRecord, setEditingRecord] = useState(null);
 
   const [queryParams, setQueryParams] = useState({
-      page: 1,
-      limit: 50,
-      sort: '-createdAt',
+      page: parseInt(searchParams.get('page')) || 1,
+      limit: parseInt(searchParams.get('limit')) || 50,
+      sort: searchParams.get('sort') || '-createdAt',
       filters: []
   });
+  const [totalRecords, setTotalRecords] = useState(0);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [rlsEnabled, setRlsEnabled] = useState(false);
   const [rlsMode, setRlsMode] = useState("public-read");
@@ -96,14 +98,28 @@ export default function Database() {
          if (f.field && f.value !== '') queryStr += `&${f.field}${f.operator === '=' ? '' : f.operator}=${encodeURIComponent(f.value)}`;
       });
       const res = await api.get(`/api/projects/${projectId}/collections/${activeCollection.name}/data${queryStr}`);
-      setData(res.data);
+      // Handle wrapped metadata response
+      if (res.data && res.data.items) {
+        setData(res.data.items);
+        setTotalRecords(res.data.total || 0);
+      } else {
+        setData(res.data || []);
+        setTotalRecords(Array.isArray(res.data) ? res.data.length : 0);
+      }
     } catch { toast.error("Failed to load data"); }
     finally { setLoadingData(false); }
   }, [activeCollection, projectId, queryParams]);
 
   useEffect(() => {
     if (!activeCollection) return;
-    setSearchParams({ collection: activeCollection.name });
+    
+    // Sync URL with current page and limit
+    const newParams = { collection: activeCollection.name };
+    if (queryParams.page > 1) newParams.page = queryParams.page;
+    if (queryParams.limit !== 50) newParams.limit = queryParams.limit;
+    if (queryParams.sort !== '-createdAt') newParams.sort = queryParams.sort;
+    
+    setSearchParams(newParams);
     fetchData();
   }, [activeCollection, fetchData, setSearchParams]);
 
@@ -190,6 +206,14 @@ export default function Database() {
                   <pre>{JSON.stringify(data, null, 2)}</pre>
                 </div>
               )}
+
+              <Pagination 
+                total={totalRecords}
+                page={queryParams.page}
+                limit={queryParams.limit}
+                onPageChange={(p) => setQueryParams(prev => ({ ...prev, page: p }))}
+                onLimitChange={(l) => setQueryParams(prev => ({ ...prev, limit: l, page: 1 }))}
+              />
             </div>
           </>
         ) : (

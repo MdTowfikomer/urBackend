@@ -134,9 +134,23 @@ module.exports.getAllData = async (req, res) => {
       .populate()
       .paginate();
 
-    const data = await features.query.lean();
+    const [data, total] = await Promise.all([
+      features.query.lean(),
+      features.count()
+    ]);
+
     if (isDebug) console.log(`[DEBUG] getall took ${(performance.now() - start).toFixed(2)}ms`);
-    res.json(data);
+    
+    res.json({
+      success: true,
+      data: {
+        items: data,
+        total,
+        page: parseInt(req.query.page, 10) || 1,
+        limit: Math.min(parseInt(req.query.limit, 10) || 50, 100)
+      },
+      message: "Data fetched successfully"
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
