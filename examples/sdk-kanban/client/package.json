@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build:sdk": "npm install --prefix ../../../sdks/urbackend-sdk && npm run build --prefix ../../../sdks/urbackend-sdk",
+    "build": "npm run build:sdk && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
