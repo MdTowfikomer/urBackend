@@ -1,6 +1,6 @@
 {
   "name": "@urbackend/sdk",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Official TypeScript SDK for urBackend BaaS",
   "type": "module",
   "files": [
@@ -56,5 +56,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.2",
     "vitest": "^4.1.2"
+  },
+  "dependencies": {
+    "client": "file:../../examples/sdk-kanban/client"
   }
 }
