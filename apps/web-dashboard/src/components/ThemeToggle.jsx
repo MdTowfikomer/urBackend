@@ -10,7 +10,7 @@ const getInitialTheme = () => {
     // localStorage not available – fallback to system preference
   }
   // Fallback to system preference
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? false : true;
+  return !window.matchMedia('(prefers-color-scheme: light)').matches;
 };
 
 const ThemeToggle = () => {
