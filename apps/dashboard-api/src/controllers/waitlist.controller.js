@@ -30,7 +30,8 @@ exports.addToWaitlist = async (req, res) => {
         res.status(201).json({ success: true, message: "Added to waitlist successfully." });
     } catch (err) {
         if (err instanceof z.ZodError) {
-            return res.status(400).json({ success: false, message: err.errors[0].message });
+            const msg = err.errors && err.errors.length > 0 ? err.errors[0].message : "Invalid input";
+            return res.status(400).json({ success: false, message: msg });
         }
         console.error(err);
         res.status(500).json({ success: false, message: "Internal server error." });

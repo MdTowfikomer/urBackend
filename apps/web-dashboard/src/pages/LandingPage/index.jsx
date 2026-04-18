@@ -104,7 +104,7 @@ function LandingPage() {
                 if (res.data.success) {
                     setWaitlistCount(res.data.data);
                 }
-            } catch (err) {
+            } catch {
                 // Ignore silent
             }
         };
