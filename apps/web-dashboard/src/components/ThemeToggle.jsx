@@ -1,22 +1,26 @@
 import React, { useState, useEffect } from 'react';
+import { Sun, Moon } from 'lucide-react';
 
-// Synchronously read initial theme to prevent React-level FOUC
+// Read initial theme synchronously – avoids React-level flash
 const getInitialTheme = () => {
   try {
     const saved = localStorage.getItem('urbackend-theme');
     if (saved === 'light') return false;   // false = light mode
     if (saved === 'dark') return true;     // true = dark mode
-  } catch {
-    // localStorage not available – fallback to system preference
+  } catch (err) {
+    console.warn('localStorage not accessible, using system preference', err);
   }
-  // Fallback to system preference
-  return !window.matchMedia('(prefers-color-scheme: light)').matches;
+  try {
+    return !window.matchMedia('(prefers-color-scheme: light)').matches;
+  } catch (err) {
+    console.warn('window.matchMedia not available, defaulting to dark mode', err);
+    return true; // default to dark mode
+  }
 };
 
 const ThemeToggle = () => {
   const [isDark, setIsDark] = useState(getInitialTheme);
 
-  // Apply class whenever isDark changes
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.remove('light-mode');
@@ -25,7 +29,6 @@ const ThemeToggle = () => {
     }
   }, [isDark]);
 
-  // Listen to system preference changes (optional)
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
     const handleChange = (e) => {
@@ -33,8 +36,8 @@ const ThemeToggle = () => {
         if (!localStorage.getItem('urbackend-theme')) {
           setIsDark(!e.matches);
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn('Could not read localStorage for theme sync', err);
       }
     };
     mediaQuery.addEventListener('change', handleChange);
@@ -46,8 +49,8 @@ const ThemeToggle = () => {
     setIsDark(newIsDark);
     try {
       localStorage.setItem('urbackend-theme', newIsDark ? 'dark' : 'light');
-    } catch {
-      console.warn('Failed to save theme preference');
+    } catch (err) {
+      console.warn('Failed to save theme preference', err);
     }
   };
 
@@ -55,11 +58,13 @@ const ThemeToggle = () => {
     <button
       type="button"
       onClick={toggleTheme}
-      className="theme-toggle-button"
+      className="nav-item"
+      style={{ width: '100%', justifyContent: 'flex-start', marginBottom: '8px' }}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      aria-pressed={!isDark}
+      aria-pressed={isDark}
     >
-      {isDark ? 'Light Mode' : 'Dark Mode'}
+      {isDark ? <Moon size={16} /> : <Sun size={16} />}
+      <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
     </button>
   );
 };
