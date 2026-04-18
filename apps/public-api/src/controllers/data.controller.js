@@ -163,6 +163,9 @@ const mergedFilter = Object.keys(baseFilter).length > 0
     });
   } catch (err) {
     console.error(err);
+    if (err && (err.statusCode === 400 || err.name === 'QueryFilterError')) {
+      return res.status(400).json({ error: err.message });
+    }
     res.status(500).json({ error: err.message });
   }
 };

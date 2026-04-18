@@ -1,4 +1,12 @@
 class QueryEngine {
+    static QueryFilterError = class QueryFilterError extends Error {
+        constructor(message) {
+            super(message);
+            this.name = 'QueryFilterError';
+            this.statusCode = 400;
+        }
+    };
+
     constructor(query, queryString) {
         this.query = query;
         this.queryString = queryString;
@@ -8,7 +16,7 @@ class QueryEngine {
 
     /**
      * Builds a MongoDB query object from the query string parameters.
-     * Handles special suffixes like _gt, _gte, _lt, _lte.
+     * Handles special suffixes like _gt, _gte, _lt, _lte, _ne, _in, _exists, _regex.
      * @param {boolean} excludeCount - Whether to explicitly exclude 'count' from the query (legacy parameter)
      * @returns {Object} MongoDB query object
      */
@@ -31,6 +39,29 @@ class QueryEngine {
             } else if (key.endsWith('_lte')) {
                 const field = key.replace(/_lte$/, '');
                 mongoQuery[field] = { ...mongoQuery[field], $lte: queryObj[key] };
+            } else if (key.endsWith('_ne')) {
+                const field = key.replace(/_ne$/, '');
+                mongoQuery[field] = { ...mongoQuery[field], $ne: queryObj[key] };
+            } else if (key.endsWith('_in')) {
+                const field = key.replace(/_in$/, '');
+                const rawValue = queryObj[key];
+                // Handle both comma-separated strings and arrays (repeated params)
+                const values = Array.isArray(rawValue) 
+                    ? rawValue.flatMap(val => String(val).split(',')).map(val => val.trim()).filter(Boolean)
+                    : String(rawValue).split(',').map(val => val.trim()).filter(Boolean);
+                mongoQuery[field] = { ...mongoQuery[field], $in: values };
+            } else if (key.endsWith('_exists')) {
+                const field = key.replace(/_exists$/, '');
+                const value = queryObj[key] === 'true';
+                mongoQuery[field] = { ...mongoQuery[field], $exists: value };
+            } else if (key.endsWith('_regex')) {
+                const field = key.replace(/_regex$/, '');
+                try {
+                    const value = new RegExp(String(queryObj[key]), 'i');
+                    mongoQuery[field] = { ...mongoQuery[field], $regex: value };
+                } catch (e) {
+                    throw new QueryEngine.QueryFilterError(`Invalid regex pattern for "${field}_regex".`);
+                }
             } else {
                 mongoQuery[key] = queryObj[key];
             }
