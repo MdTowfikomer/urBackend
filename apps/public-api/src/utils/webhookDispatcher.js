@@ -1,4 +1,6 @@
-const { Webhook, enqueueWebhookDelivery } = require("@urbackend/common");
+const { Webhook, enqueueWebhookDelivery, redis } = require("@urbackend/common");
+const { getMonthKey, getEndOfMonthTtlSeconds, incrWithTtlAtomic } = require("./usageCounter");
+
 
 /**
  * Dispatch webhooks for a data operation
@@ -47,9 +49,18 @@ async function dispatchWebhooks({ projectId, collection, action, document, docum
         projectId,
         event,
         payload,
-      }).catch((err) => {
-        console.error(`[Webhook Dispatch] Failed to enqueue: ${err.message}`);
-      });
+      })
+        .then(() => {
+          const now = new Date();
+          const monthKey = getMonthKey(now);
+          const ttlSeconds = getEndOfMonthTtlSeconds(now);
+          const key = `project:usage:webhook:enqueued:${projectId}:${monthKey}`;
+          // This counter tracks deliveries successfully queued, not attempted enqueue calls.
+          incrWithTtlAtomic(redis, key, ttlSeconds).catch(() => {});
+        })
+        .catch((err) => {
+          console.error(`[Webhook Dispatch] Failed to enqueue: ${err.message}`);
+        });
     }
   } catch (err) {
     // Log but don't throw - webhooks should never block the main operation

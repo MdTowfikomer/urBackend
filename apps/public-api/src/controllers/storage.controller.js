@@ -1,12 +1,22 @@
-const { getStorage } = require("@urbackend/common");
+const { getStorage, redis } = require("@urbackend/common");
 const { randomUUID } = require("crypto");
 const {Project} = require("@urbackend/common");
 const { isProjectStorageExternal } = require("@urbackend/common");
+const { getMonthKey, getEndOfMonthTtlSeconds, incrWithTtlAtomic } = require("../utils/usageCounter");
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const getBucket = (project) =>
     isProjectStorageExternal(project) ? "files" : "dev-files";
+
+const updateMonthlyUsageCounter = (projectId, metricName, value) => {
+    if (!value || value <= 0) return;
+    const now = new Date();
+    const monthKey = getMonthKey(now);
+    const ttlSeconds = getEndOfMonthTtlSeconds(now);
+    const key = `project:usage:${metricName}:${projectId}:${monthKey}`;
+    incrWithTtlAtomic(redis, key, ttlSeconds, value).catch(() => {});
+};
 
 
 // Upload File
@@ -68,6 +78,8 @@ module.exports.uploadFile = async (req, res) => {
             .from(bucket)
             .getPublicUrl(filePath);
 
+        updateMonthlyUsageCounter(project._id, "storage:uploadedBytes", file.size);
+
         return res.status(201).json({
             message: "File uploaded successfully",
             url: publicUrlData.publicUrl,
@@ -105,19 +117,24 @@ module.exports.deleteFile = async (req, res) => {
 
         const supabase = await getStorage(project);
 
-        // Fetch metadata before delete (for internal storage accounting)
+        // Fetch metadata before delete so deleted-byte metrics work for both internal and external providers.
         let fileSize = 0;
-        if (!external) {
+        try {
+            const rootPrefix = path.split("/")[0];
+            const nestedPath = path.split("/").slice(1).join("/");
             const { data, error } = await supabase.storage
                 .from(bucket)
-                .list(path.split("/")[0], {
-                    search: path.split("/").slice(1).join("/")
+                .list(rootPrefix, {
+                    search: nestedPath,
+                    limit: 1,
                 });
 
             if (error) throw error;
             if (data?.length) {
-                fileSize = data[0].metadata?.size || 0;
+                fileSize = Number(data[0].metadata?.size) || 0;
             }
+        } catch {
+            fileSize = 0;
         }
 
         const { error: deleteError } = await supabase.storage
@@ -132,6 +149,8 @@ module.exports.deleteFile = async (req, res) => {
                 { $inc: { storageUsed: -fileSize } }
             );
         }
+
+        updateMonthlyUsageCounter(project._id, "storage:deletedBytes", fileSize);
 
         return res.json({ message: "File deleted successfully" });
     } catch (err) {

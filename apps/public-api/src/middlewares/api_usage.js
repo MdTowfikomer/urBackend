@@ -1,5 +1,7 @@
 const rateLimit = require('express-rate-limit');
-const {Log} = require('@urbackend/common');
+const { Log, redis } = require('@urbackend/common');
+const { getDayKey, DEFAULT_DAILY_TTL_SECONDS, incrWithTtlAtomic } = require('../utils/usageCounter');
+
 
 // Rate Limiter 
 
@@ -33,6 +35,12 @@ const logger = (req, res, next) => {
                         status: res.statusCode,
                         ip: req.ip
                     });
+
+                    // Usage counter (Redis): daily API requests per project
+                    const day = getDayKey();
+                    const reqCountKey = `project:usage:req:count:${req.project._id}:${day}`;
+                    incrWithTtlAtomic(redis, reqCountKey, DEFAULT_DAILY_TTL_SECONDS).catch(() => {});
+
                     console.log(`📝 Logged: ${req.method} ${req.originalUrl} (${res.statusCode})`);
                 } catch (e) {
                     console.error("Logging failed:", e.message);

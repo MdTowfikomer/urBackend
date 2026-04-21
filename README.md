@@ -28,6 +28,12 @@
 
 </div>
 
+<p align="center">
+  <small><b>License:</b> Core apps/packages are AGPL-3.0-only · examples and <code>@urbackend/sdk</code> are MIT.</small>
+  <br />
+  <small>Contributions currently do not require CLA/DCO; submitted changes are licensed under the package license they modify (details in <code>CONTRIBUTING.md</code>).</small>
+</p>
+
 ---
 
 urBackend is an **Open-Source BaaS** built to eliminate the complexity of backend management. It provides everything you need to power your next big idea—accessible via a unified REST API.
