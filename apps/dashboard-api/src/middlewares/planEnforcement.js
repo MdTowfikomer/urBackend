@@ -106,10 +106,11 @@ exports.checkByokGate = async (req, res, next) => {
         if (req.user?.isAdmin) return next();
 
         let customLimits = null;
-        const projectId = req.params.projectId || req.body.projectId || req.query.projectId;
+        const rawProjectId = req.params.projectId || req.body.projectId || req.query.projectId;
         
-        if (projectId && /^[a-fA-F0-9]{24}$/.test(projectId)) {
-            const project = await Project.findById(projectId).select('customLimits').lean();
+        if (typeof rawProjectId === 'string' && mongoose.Types.ObjectId.isValid(rawProjectId)) {
+            const projectObjectId = new mongoose.Types.ObjectId(rawProjectId);
+            const project = await Project.findById(projectObjectId).select('customLimits').lean();
             if (project) {
                 customLimits = project.customLimits;
             }
@@ -137,10 +138,11 @@ exports.checkByomGate = async (req, res, next) => {
         if (req.user?.isAdmin) return next();
 
         let customLimits = null;
-        const projectId = req.params.projectId || req.body.projectId || req.query.projectId;
+        const rawProjectId = req.params.projectId || req.body.projectId || req.query.projectId;
         
-        if (projectId && /^[a-fA-F0-9]{24}$/.test(projectId)) {
-            const project = await Project.findById(projectId).select('customLimits').lean();
+        if (typeof rawProjectId === 'string' && mongoose.Types.ObjectId.isValid(rawProjectId)) {
+            const projectObjectId = new mongoose.Types.ObjectId(rawProjectId);
+            const project = await Project.findById(projectObjectId).select('customLimits').lean();
             if (project) {
                 customLimits = project.customLimits;
             }
