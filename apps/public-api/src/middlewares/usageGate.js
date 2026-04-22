@@ -53,38 +53,42 @@ exports.checkUsageLimits = async (req, res, next) => {
         // 1. Resolve Plan context
         const planContext = await resolveDeveloperPlanContext(req);
         const effectivePlan = resolveEffectivePlan(planContext);
-        
+
         const limits = getPlanLimits({
             plan: effectivePlan,
             customLimits: req.project.customLimits,
             legacyLimits: planContext.legacyLimits
         });
 
+        // Attach limits immediately so downstream sees them even if Redis fails
+        req.planLimits = limits;
+
         // 2. Per-Minute Limit (Server Protection)
         // Key: project:min:req:{projectId}:{YYYY-MM-DD:HH:MM}
         const minKey = `project:usage:min:${req.project._id}:${new Date().toISOString().substring(0, 16)}`;
         const minCount = await incrWithTtlAtomic(redis, minKey, 65); // 65s TTL
-        
+
         if (limits.reqPerMinute !== -1 && minCount > limits.reqPerMinute) {
             return next(new AppError(429, 'Rate limit exceeded (per minute). Please slow down or upgrade your plan.'));
         }
 
-        // 3. Daily Limit Enforcement
+        // 3. Daily Limit Enforcement (Atomic)
         // Use existing key pattern from api_usage.js for consistency
         const day = getDayKey();
         const reqCountKey = `project:usage:req:count:${req.project._id}:${day}`;
-        
-        // We use INCRBY 0 to just read the current count if we don't want to double count,
-        // BUT actually, we should increment it here and skip it in the logger to be precise.
-        // For now, let's just check the current value.
-        const currentDailyCount = parseInt(await redis.get(reqCountKey) || '0');
 
-        if (limits.reqPerDay !== -1 && currentDailyCount >= limits.reqPerDay) {
+        // Atomically increment and check
+        const newDailyCount = await incrWithTtlAtomic(redis, reqCountKey, DEFAULT_DAILY_TTL_SECONDS);
+
+        if (limits.reqPerDay !== -1 && newDailyCount > limits.reqPerDay) {
+            // Rollback the increment
+            await redis.decr(reqCountKey);
             return next(new AppError(429, 'Daily request limit reached. Upgrade your plan to increase limits.'));
         }
 
-        // Attach limits to request for downstream usage if needed
-        req.planLimits = limits;
+        // Mark that we've already incremented so the logger skips duplicate increment
+        req._dailyCountIncremented = true;
+
         next();
     } catch (err) {
         // Fallback to next if redis fails to avoid blocking all traffic

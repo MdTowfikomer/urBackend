@@ -5,6 +5,6 @@ const requireSecretKey = require("../middlewares/requireSecretKey");
 const { checkUsageLimits } = require("../middlewares/usageGate");
 const { sendMail } = require("../controllers/mail.controller");
 
-router.post("/send", verifyApiKey, checkUsageLimits, requireSecretKey, sendMail);
+router.post("/send", verifyApiKey, requireSecretKey, checkUsageLimits, sendMail);
 
 module.exports = router;

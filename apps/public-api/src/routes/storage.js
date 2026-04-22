@@ -13,12 +13,12 @@ const upload = multer({
 });
 
 // POST REQ UPLOAD FILE
-router.post('/upload', verifyApiKey, checkUsageLimits, requireSecretKey, upload.single('file'), uploadFile);
+router.post('/upload', verifyApiKey, requireSecretKey, checkUsageLimits, upload.single('file'), uploadFile);
 
 // DELETE REQ SINGLE FILE
-router.delete('/file', verifyApiKey, checkUsageLimits, requireSecretKey, deleteFile);
+router.delete('/file', verifyApiKey, requireSecretKey, checkUsageLimits, deleteFile);
 
 // DELETE REQ ALL FILES
-router.delete('/all', verifyApiKey, checkUsageLimits, requireSecretKey, deleteAllFiles);
+router.delete('/all', verifyApiKey, requireSecretKey, checkUsageLimits, deleteAllFiles);
 
 module.exports = router;
