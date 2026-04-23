@@ -47,7 +47,10 @@ module.exports.createCheckout = async (req, res, next) => {
 
         res.json({
             success: true,
-            data: { checkoutUrl: subscription.short_url },
+            data: { 
+                subscriptionId: subscription.id,
+                keyId: process.env.RAZORPAY_KEY_ID
+            },
             message: ''
         });
     } catch (err) {

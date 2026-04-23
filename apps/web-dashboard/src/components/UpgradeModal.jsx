@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Zap, Check, Loader2 } from 'lucide-react';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
 const FREE_FEATURES = [
     '1 Project',
@@ -28,22 +30,74 @@ const PRO_FEATURES = [
 
 export default function UpgradeModal({ isOpen, onClose }) {
     const [isLoading, setIsLoading] = useState(false);
+    const navigate = useNavigate();
+    const { user } = useAuth();
 
     if (!isOpen) return null;
+
+    const loadRazorpayScript = () => {
+        return new Promise((resolve) => {
+            if (window.Razorpay) return resolve(true);
+            const script = document.createElement('script');
+            script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+            document.body.appendChild(script);
+        });
+    };
 
     const handleUpgrade = async () => {
         setIsLoading(true);
         try {
             const res = await api.post('/api/billing/checkout');
-            if (res.data?.success && res.data.data?.checkoutUrl) {
-                window.location.href = res.data.data.checkoutUrl;
-            } else {
+            const { subscriptionId, keyId } = res.data?.data || {};
+
+            if (!res.data?.success || !subscriptionId || !keyId) {
                 toast.error('Could not start checkout. Please try again.');
+                setIsLoading(false);
+                return;
             }
+
+            const isScriptLoaded = await loadRazorpayScript();
+            if (!isScriptLoaded) {
+                toast.error('Failed to load payment gateway. Please check your internet connection.');
+                setIsLoading(false);
+                return;
+            }
+
+            const options = {
+                key: keyId,
+                subscription_id: subscriptionId,
+                name: 'urBackend',
+                description: 'urBackend Pro Subscription',
+                handler: function (response) {
+                    toast.success('Payment successful! Upgrading your account...');
+                    onClose();
+                    navigate('/billing/success');
+                },
+                prefill: {
+                    name: user?.name || '',
+                    email: user?.email || '',
+                },
+                theme: {
+                    color: '#7B61FF',
+                },
+                modal: {
+                    ondismiss: function () {
+                        setIsLoading(false);
+                    }
+                }
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (response) {
+                toast.error(response.error.description || 'Payment failed.');
+                setIsLoading(false);
+            });
+            rzp.open();
         } catch (err) {
             const msg = err?.response?.data?.message || 'Checkout failed. Please try again.';
             toast.error(msg);
-        } finally {
             setIsLoading(false);
         }
     };
