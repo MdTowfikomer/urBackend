@@ -66,13 +66,21 @@ app.use(standardizeApiResponse);
 
 app.use(cookieParser());
 
-app.use(csurf({ 
+const csrfProtection = csurf({ 
     cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
     } 
-}));
+});
+
+app.use((req, res, next) => {
+    // Exclude Razorpay webhook from CSRF protection since it's an external POST request
+    if (req.path === '/api/billing/webhook') {
+        return next();
+    }
+    csrfProtection(req, res, next);
+});
 
 
 if (process.env.NODE_ENV !== 'test') {
