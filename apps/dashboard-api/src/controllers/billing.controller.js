@@ -1,20 +1,28 @@
-const { Developer, AppError } = require('@urbackend/common');
+const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const { Developer, AppError } = require('@urbackend/common');
 
-const LEMONSQUEEZY_API_URL = 'https://api.lemonsqueezy.com/v1';
+const getRazorpayInstance = () => {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+    if (!keyId || !keySecret) {
+        throw new AppError(503, 'Billing is not configured yet. Please contact support.');
+    }
+
+    return new Razorpay({ key_id: keyId, key_secret: keySecret });
+};
 
 /**
- * Creates a Lemon Squeezy checkout session for the authenticated developer.
+ * Creates a Razorpay subscription session for the authenticated developer.
  * POST /api/billing/checkout
+ * Returns a `subscriptionUrl` that the frontend redirects to.
  */
 module.exports.createCheckout = async (req, res, next) => {
     try {
-        const apiKey = process.env.LEMONSQUEEZY_API_KEY;
-        const storeId = process.env.LEMONSQUEEZY_STORE_ID;
-        const variantId = process.env.LEMONSQUEEZY_VARIANT_ID;
-
-        if (!apiKey || !storeId || !variantId) {
-            return next(new AppError(503, 'Billing is not configured yet. Please contact support.'));
+        const planId = process.env.RAZORPAY_PLAN_ID;
+        if (!planId) {
+            return next(new AppError(503, 'Billing plan is not configured yet. Please contact support.'));
         }
 
         const developer = await Developer.findById(req.user._id).select('email plan');
@@ -24,134 +32,110 @@ module.exports.createCheckout = async (req, res, next) => {
             return next(new AppError(400, 'You are already on the Pro plan.'));
         }
 
-        const body = {
-            data: {
-                type: 'checkouts',
-                attributes: {
-                    checkout_data: {
-                        email: developer.email,
-                        custom: {
-                            developer_id: developer._id.toString()
-                        }
-                    },
-                    product_options: {
-                        redirect_url: `${process.env.FRONTEND_URL}/billing/success`,
-                    }
-                },
-                relationships: {
-                    store: {
-                        data: { type: 'stores', id: storeId }
-                    },
-                    variant: {
-                        data: { type: 'variants', id: variantId }
-                    }
-                }
-            }
-        };
+        const razorpay = getRazorpayInstance();
 
-        const response = await fetch(`${LEMONSQUEEZY_API_URL}/checkouts`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/vnd.api+json',
-                'Accept': 'application/vnd.api+json'
+        const subscription = await razorpay.subscriptions.create({
+            plan_id: planId,
+            customer_notify: 1,
+            quantity: 1,
+            total_count: 120,   // Max 10 years of monthly billing
+            notes: {
+                developer_id: developer._id.toString(),
+                email: developer.email,
             },
-            body: JSON.stringify(body)
+            // After payment, Razorpay redirects here
+            callback_url: `${process.env.FRONTEND_URL}/billing/success`,
         });
 
-        const json = await response.json();
-
-        if (!response.ok) {
-            console.error('Lemon Squeezy checkout error:', json);
-            return next(new AppError(502, 'Failed to create checkout session. Please try again.'));
-        }
-
-        const checkoutUrl = json?.data?.attributes?.url;
-        if (!checkoutUrl) {
-            return next(new AppError(502, 'No checkout URL returned from billing provider.'));
-        }
-
-        res.json({ success: true, data: { checkoutUrl }, message: '' });
+        res.json({
+            success: true,
+            data: { checkoutUrl: subscription.short_url },
+            message: ''
+        });
     } catch (err) {
-        next(err);
+        if (err instanceof AppError) return next(err);
+        console.error('Razorpay checkout error:', err);
+        return next(new AppError(502, 'Failed to create checkout session. Please try again.'));
     }
 };
 
 /**
- * Handles Lemon Squeezy webhook events.
+ * Handles Razorpay webhook events.
  * POST /api/billing/webhook
  *
  * Supported events:
- *   - order_created (one-time purchase)
- *   - subscription_created
- *   - subscription_renewed
- *   - subscription_cancelled (no action — auto-degrade on expiry)
+ *   - subscription.activated   → upgrade to pro
+ *   - subscription.charged     → renew planExpiresAt
+ *   - subscription.cancelled   → no action (auto-degrade on expiry)
+ *   - subscription.completed   → same as cancelled
  */
 module.exports.handleWebhook = async (req, res, next) => {
     try {
-        const webhookSecret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
+        const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-        // Validate HMAC signature
+        // Validate Razorpay HMAC signature
         if (webhookSecret) {
-            const signature = req.headers['x-signature'];
+            const signature = req.headers['x-razorpay-signature'];
             if (!signature) {
                 return res.status(401).json({ success: false, message: 'Missing webhook signature.' });
             }
 
-            const hmac = crypto.createHmac('sha256', webhookSecret);
-            const digest = hmac.update(req.rawBody || JSON.stringify(req.body)).digest('hex');
+            const rawBody = req.rawBody || JSON.stringify(req.body);
+            const expectedSignature = crypto
+                .createHmac('sha256', webhookSecret)
+                .update(rawBody)
+                .digest('hex');
 
-            if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest))) {
+            if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
                 return res.status(401).json({ success: false, message: 'Invalid webhook signature.' });
             }
         }
 
-        const eventName = req.headers['x-event-name'];
-        const payload = req.body;
-        const meta = payload?.meta?.custom_data || payload?.data?.attributes?.first_order_item;
-        const developerId = payload?.meta?.custom_data?.developer_id;
+        const event = req.body.event;
+        const payload = req.body.payload?.subscription?.entity;
 
+        if (!payload) {
+            return res.json({ success: true, message: 'No subscription payload. Skipped.' });
+        }
+
+        // Extract developer_id from subscription notes
+        const developerId = payload.notes?.developer_id;
         if (!developerId) {
-            // Unknown origin — acknowledge but skip
-            return res.json({ success: true, message: 'No developer_id in payload. Skipped.' });
+            console.warn('Razorpay webhook: no developer_id in notes');
+            return res.json({ success: true, message: 'No developer_id in notes. Skipped.' });
         }
 
         const developer = await Developer.findById(developerId);
         if (!developer) {
-            console.warn(`Billing webhook: developer not found for id ${developerId}`);
+            console.warn(`Razorpay webhook: developer not found for id ${developerId}`);
             return res.json({ success: true, message: 'Developer not found. Skipped.' });
         }
 
         const now = new Date();
 
-        if (eventName === 'order_created' || eventName === 'subscription_created') {
-            // Set plan to pro for 30 days (or subscription period)
-            const renewsAt = payload?.data?.attributes?.renews_at;
-            const planExpiresAt = renewsAt ? new Date(renewsAt) : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        if (event === 'subscription.activated' || event === 'subscription.charged') {
+            // current_end is unix timestamp of next billing date
+            const currentEnd = payload.current_end;
+            const planExpiresAt = currentEnd
+                ? new Date(currentEnd * 1000)
+                : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
             developer.plan = 'pro';
             developer.planActivatedAt = now;
             developer.planExpiresAt = planExpiresAt;
             await developer.save();
 
-            console.log(`✅ Developer ${developerId} upgraded to pro. Expires: ${planExpiresAt}`);
-        } else if (eventName === 'subscription_renewed') {
-            const renewsAt = payload?.data?.attributes?.renews_at;
-            if (renewsAt) {
-                developer.planExpiresAt = new Date(renewsAt);
-                await developer.save();
-                console.log(`🔄 Developer ${developerId} plan renewed. New expiry: ${developer.planExpiresAt}`);
-            }
-        } else if (eventName === 'subscription_cancelled') {
+            console.log(`✅ Developer ${developerId} ${event === 'subscription.activated' ? 'upgraded to pro' : 'plan renewed'}. Expires: ${planExpiresAt}`);
+        } else if (event === 'subscription.cancelled' || event === 'subscription.completed') {
             // Do NOT downgrade immediately — resolveEffectivePlan handles auto-degrade on expiry
-            console.log(`ℹ️ Subscription cancelled for ${developerId}. Will degrade on ${developer.planExpiresAt}`);
+            console.log(`ℹ️ Subscription ${event} for ${developerId}. Will degrade on ${developer.planExpiresAt}`);
         }
 
-        // Always respond 200 to acknowledge
+        // Always return 200 to acknowledge
         res.json({ success: true, message: 'Webhook processed.' });
     } catch (err) {
         console.error('Billing webhook error:', err);
-        // Still return 200 to avoid Lemon Squeezy retry storms
+        // Return 200 to avoid Razorpay retry storms
         res.json({ success: true, message: 'Internal error. Logged.' });
     }
 };
