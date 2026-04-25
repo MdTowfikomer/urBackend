@@ -14,6 +14,7 @@ const { generateApiKey, hashApiKey } = require("@urbackend/common");
 const { z } = require("zod");
 const { encrypt } = require("@urbackend/common");
 const { URL } = require("url");
+const path = require("path");
 const { getConnection } = require("@urbackend/common");
 const { getCompiledModel } = require("@urbackend/common");
 const { QueryEngine } = require("@urbackend/common");
@@ -25,9 +26,15 @@ const {
   deleteProjectById,
 } = require("@urbackend/common");
 const { isProjectStorageExternal, getBucket } = require("@urbackend/common");
+const { getPresignedUploadUrl } = require("@urbackend/common");
+const { verifyUploadedFile } = require("@urbackend/common");
 const { getPublicIp } = require("@urbackend/common");
 const { clearCompiledModel } = require("@urbackend/common");
 const { createUniqueIndexes } = require("@urbackend/common");
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const SAFETY_MAX_BYTES = 100 * 1024 * 1024;
+const CONFIRM_UPLOAD_SIZE_TOLERANCE_BYTES = 64;
 
 const validateUsersSchema = (schema) => {
   if (!Array.isArray(schema)) return false;
@@ -183,6 +190,54 @@ const sanitizeProjectResponse = (projectObj) => {
   }
 
   return projectObj;
+};
+
+const parsePositiveSize = (size) => {
+  const numericSize = Number(size);
+  if (!Number.isFinite(numericSize) || numericSize <= 0) {
+    return null;
+  }
+  return numericSize;
+};
+
+const normalizeProjectPath = (projectId, inputPath) => {
+  if (typeof inputPath !== "string") {
+    return null;
+  }
+
+  let decodedPath = inputPath;
+  try {
+    decodedPath = decodeURIComponent(inputPath);
+  } catch {
+    return null;
+  }
+
+  const normalizedPath = path.posix.normalize(decodedPath).replace(/^\/+/, "");
+  const segments = normalizedPath.split("/").filter(Boolean);
+
+  if (segments.length < 2) {
+    return null;
+  }
+
+  if (segments[0] !== String(projectId)) {
+    return null;
+  }
+
+  if (segments.some((segment) => segment === "." || segment === "..")) {
+    return null;
+  }
+
+  return normalizedPath;
+};
+
+const bestEffortDeleteUploadedObject = async (project, filePath) => {
+  try {
+    const supabase = await getStorage(project);
+    const bucket = getBucket(project);
+    await supabase.storage.from(bucket).remove([filePath]);
+  } catch {
+    // ignore cleanup failures; the primary response should still be returned
+  }
 };
 
 module.exports.createProject = async (req, res) => {
@@ -1161,6 +1216,174 @@ module.exports.deleteAllFiles = async (req, res) => {
     res.json({ success: true, deleted });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports.requestUpload = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { filename, contentType, size } = req.body;
+    const numericSize = parsePositiveSize(size);
+
+    if (!filename || !contentType || numericSize === null) {
+      return res
+        .status(400)
+        .json({ error: "filename, contentType, and size are required." });
+    }
+
+    if (numericSize > MAX_FILE_SIZE) {
+      return res.status(413).json({ error: "File size exceeds limit." });
+    }
+
+    const project = await Project.findOne({
+      _id: projectId,
+      owner: req.user._id,
+    }).select(
+      "+resources.storage.config.encrypted +resources.storage.config.iv +resources.storage.config.tag resources.storage.isExternal storageUsed storageLimit",
+    );
+
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    const external = isProjectStorageExternal(project);
+
+    // just peek at quota - don't charge yet, upload hasn't happened
+    if (!external) {
+      const storageLimit =
+        typeof project.storageLimit === "number"
+          ? project.storageLimit
+          : 20 * 1024 * 1024;
+      const quotaLimit =
+        storageLimit === -1 ? SAFETY_MAX_BYTES : storageLimit;
+
+      if ((project.storageUsed || 0) + numericSize > quotaLimit) {
+        return res.status(403).json({ error: "Internal storage limit exceeded." });
+      }
+    }
+
+    const safeName = filename.replace(/\s+/g, "_");
+    const filePath = `${projectId}/${randomUUID()}_${safeName}`;
+
+    const { signedUrl, token } = await getPresignedUploadUrl(
+      project,
+      filePath,
+      contentType,
+      numericSize,
+    );
+
+    return res.status(200).json({ signedUrl, token, filePath });
+  } catch (err) {
+    return res.status(500).json({
+      error: "Could not generate upload URL",
+      details: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+};
+
+module.exports.confirmUpload = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { filePath, size } = req.body;
+    const declaredSize = parsePositiveSize(size);
+
+    if (!filePath || declaredSize === null) {
+      return res.status(400).json({ error: "filePath and size are required." });
+    }
+
+    const project = await Project.findOne({
+      _id: projectId,
+      owner: req.user._id,
+    }).select(
+      "+resources.storage.config.encrypted +resources.storage.config.iv +resources.storage.config.tag resources.storage.isExternal storageUsed storageLimit",
+    );
+
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    const external = isProjectStorageExternal(project);
+    const normalizedPath = normalizeProjectPath(projectId, filePath);
+
+    // make sure client isn't confirming someone else's file
+    if (!normalizedPath) {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
+    // verify file actually exists on cloud before touching quota
+    let actualSize;
+    try {
+      actualSize = await verifyUploadedFile(project, normalizedPath);
+    } catch (err) {
+      if (err?.message === "File not found after upload") {
+        await bestEffortDeleteUploadedObject(project, normalizedPath);
+        return res.status(409).json({
+          error: "UPLOAD_NOT_READY",
+          message: "Uploaded file is not visible yet. Please retry confirmation.",
+        });
+      }
+      throw err;
+    }
+
+    if (!Number.isFinite(actualSize) || actualSize <= 0) {
+      await bestEffortDeleteUploadedObject(project, normalizedPath);
+      return res.status(500).json({
+        error: "Upload confirmation failed",
+        details:
+          process.env.NODE_ENV === "development"
+            ? "Uploaded file size could not be determined"
+            : undefined,
+      });
+    }
+
+    if (Math.abs(actualSize - declaredSize) > CONFIRM_UPLOAD_SIZE_TOLERANCE_BYTES) {
+      await bestEffortDeleteUploadedObject(project, normalizedPath);
+      return res
+        .status(400)
+        .json({ error: "Declared file size does not match uploaded file size." });
+    }
+
+    // now it's safe to charge quota
+    if (!external) {
+      const result = await Project.updateOne(
+        {
+          _id: project._id,
+          $or: [
+            { storageLimit: -1 },
+            { $expr: { $lte: [{ $add: ["$storageUsed", actualSize] }, "$storageLimit"] } },
+          ],
+        },
+        { $inc: { storageUsed: actualSize } },
+      );
+
+      if (result.matchedCount === 0) {
+        await bestEffortDeleteUploadedObject(project, normalizedPath);
+        return res.status(403).json({ error: "Internal storage limit exceeded." });
+      }
+    }
+
+    const supabase = await getStorage(project);
+    const bucket = getBucket(project);
+    const { data: publicUrlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(normalizedPath);
+
+    const response = {
+      message: "Upload confirmed",
+      path: normalizedPath,
+      provider: external ? "external" : "internal",
+    };
+
+    if (publicUrlData?.publicUrl) {
+      response.url = publicUrlData.publicUrl;
+    } else {
+      response.url = null;
+      response.warning =
+        publicUrlData?.error || "Upload confirmed, but a public URL is unavailable.";
+    }
+
+    return res.status(200).json(response);
+  } catch (err) {
+    return res.status(500).json({
+      error: "Upload confirmation failed",
+      details: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
   }
 };
 

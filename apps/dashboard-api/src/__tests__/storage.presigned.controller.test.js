@@ -1,0 +1,258 @@
+'use strict';
+
+jest.mock('crypto', () => {
+  const actual = jest.requireActual('crypto');
+  return {
+    ...actual,
+    randomUUID: jest.fn(() => 'mocked-uuid'),
+  };
+});
+
+jest.mock('@urbackend/common', () => {
+  const mockStorageFrom = {
+    getPublicUrl: jest.fn(),
+    remove: jest.fn(),
+  };
+
+  const mockSupabaseStorage = {
+    from: jest.fn(() => mockStorageFrom),
+  };
+
+  return {
+    Project: {
+      findOne: jest.fn(),
+      updateOne: jest.fn(),
+    },
+    getStorage: jest.fn(() => ({
+      storage: mockSupabaseStorage,
+    })),
+    getPresignedUploadUrl: jest.fn(),
+    verifyUploadedFile: jest.fn(),
+    isProjectStorageExternal: jest.fn(),
+    getBucket: jest.fn(() => 'dev-files'),
+    __mockStorageFrom: mockStorageFrom,
+  };
+});
+
+const {
+  Project,
+  getPresignedUploadUrl,
+  verifyUploadedFile,
+  isProjectStorageExternal,
+  __mockStorageFrom: mockStorageFrom,
+} = require('@urbackend/common');
+
+const controller = require('../controllers/project.controller');
+
+const makeRes = () => {
+  const res = { status: jest.fn(), json: jest.fn() };
+  res.status.mockReturnValue(res);
+  res.json.mockReturnValue(res);
+  return res;
+};
+
+const makeProject = (overrides = {}) => ({
+  _id: 'project1',
+  owner: 'dev1',
+  storageUsed: 100,
+  storageLimit: 1024 * 1024,
+  resources: { storage: { isExternal: false } },
+  ...overrides,
+});
+
+const mockFindOneSelect = (project) => {
+  Project.findOne.mockReturnValue({
+    select: jest.fn().mockResolvedValue(project),
+  });
+};
+
+describe('dashboard project.controller presigned upload', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.NODE_ENV = 'test';
+  });
+
+  describe('requestUpload', () => {
+    test('returns 400 for invalid input', async () => {
+      const req = {
+        params: { projectId: 'project1' },
+        body: { filename: 'a.txt', contentType: 'text/plain', size: 'abc' },
+        user: { _id: 'dev1' },
+      };
+      const res = makeRes();
+
+      await controller.requestUpload(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        error: 'filename, contentType, and size are required.',
+      });
+    });
+
+    test('returns 403 when internal quota is exceeded', async () => {
+      mockFindOneSelect(makeProject({ storageUsed: 900, storageLimit: 1000 }));
+      isProjectStorageExternal.mockReturnValue(false);
+
+      const req = {
+        params: { projectId: 'project1' },
+        body: { filename: 'a.txt', contentType: 'text/plain', size: 200 },
+        user: { _id: 'dev1' },
+      };
+      const res = makeRes();
+
+      await controller.requestUpload(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Internal storage limit exceeded.' });
+    });
+
+    test('returns signed URL payload on success', async () => {
+      mockFindOneSelect(makeProject());
+      isProjectStorageExternal.mockReturnValue(false);
+      getPresignedUploadUrl.mockResolvedValue({
+        signedUrl: 'https://signed.example/upload',
+        token: 't1',
+      });
+
+      const req = {
+        params: { projectId: 'project1' },
+        body: { filename: 'my file.txt', contentType: 'text/plain', size: 1234 },
+        user: { _id: 'dev1' },
+      };
+      const res = makeRes();
+
+      await controller.requestUpload(req, res);
+
+      expect(getPresignedUploadUrl).toHaveBeenCalledWith(
+        expect.objectContaining({ _id: 'project1' }),
+        'project1/mocked-uuid_my_file.txt',
+        'text/plain',
+        1234,
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        signedUrl: 'https://signed.example/upload',
+        token: 't1',
+        filePath: 'project1/mocked-uuid_my_file.txt',
+      });
+    });
+  });
+
+  describe('confirmUpload', () => {
+    test('returns 403 when project path does not match', async () => {
+      mockFindOneSelect(makeProject());
+      isProjectStorageExternal.mockReturnValue(false);
+
+      const req = {
+        params: { projectId: 'project1' },
+        body: { filePath: 'project2/file.txt', size: 200 },
+        user: { _id: 'dev1' },
+      };
+      const res = makeRes();
+
+      await controller.confirmUpload(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Access denied.' });
+    });
+
+    test('returns 409 when uploaded file is not visible yet', async () => {
+      mockFindOneSelect(makeProject());
+      isProjectStorageExternal.mockReturnValue(false);
+      verifyUploadedFile.mockRejectedValue(new Error('File not found after upload'));
+      mockStorageFrom.remove.mockResolvedValue({ data: null, error: null });
+
+      const req = {
+        params: { projectId: 'project1' },
+        body: { filePath: 'project1/file.txt', size: 200 },
+        user: { _id: 'dev1' },
+      };
+      const res = makeRes();
+
+      await controller.confirmUpload(req, res);
+
+      expect(mockStorageFrom.remove).toHaveBeenCalledWith(['project1/file.txt']);
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        error: 'UPLOAD_NOT_READY',
+        message: 'Uploaded file is not visible yet. Please retry confirmation.',
+      });
+    });
+
+    test('returns 400 when declared size mismatches actual size', async () => {
+      mockFindOneSelect(makeProject());
+      isProjectStorageExternal.mockReturnValue(false);
+      verifyUploadedFile.mockResolvedValue(1024);
+      mockStorageFrom.remove.mockResolvedValue({ data: null, error: null });
+
+      const req = {
+        params: { projectId: 'project1' },
+        body: { filePath: 'project1/file.txt', size: 900 },
+        user: { _id: 'dev1' },
+      };
+      const res = makeRes();
+
+      await controller.confirmUpload(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        error: 'Declared file size does not match uploaded file size.',
+      });
+      expect(mockStorageFrom.remove).toHaveBeenCalledWith(['project1/file.txt']);
+    });
+
+    test('charges quota and returns success on internal storage', async () => {
+      mockFindOneSelect(makeProject());
+      isProjectStorageExternal.mockReturnValue(false);
+      verifyUploadedFile.mockResolvedValue(1024);
+      Project.updateOne.mockResolvedValue({ matchedCount: 1 });
+      mockStorageFrom.getPublicUrl.mockReturnValue({ data: { publicUrl: 'https://cdn.example/p/project1/file.txt' } });
+
+      const req = {
+        params: { projectId: 'project1' },
+        body: { filePath: 'project1/file.txt', size: 1024 },
+        user: { _id: 'dev1' },
+      };
+      const res = makeRes();
+
+      await controller.confirmUpload(req, res);
+
+      expect(Project.updateOne).toHaveBeenCalledWith(
+        {
+          _id: 'project1',
+          $or: [
+            { storageLimit: -1 },
+            { $expr: { $lte: [{ $add: ['$storageUsed', 1024] }, '$storageLimit'] } },
+          ],
+        },
+        { $inc: { storageUsed: 1024 } },
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Upload confirmed',
+        path: 'project1/file.txt',
+        provider: 'internal',
+      }));
+    });
+
+    test('skips quota charge for external storage', async () => {
+      mockFindOneSelect(makeProject({ resources: { storage: { isExternal: true } } }));
+      isProjectStorageExternal.mockReturnValue(true);
+      verifyUploadedFile.mockResolvedValue(512);
+      mockStorageFrom.getPublicUrl.mockReturnValue({ data: { publicUrl: null, error: 'No public host' } });
+
+      const req = {
+        params: { projectId: 'project1' },
+        body: { filePath: 'project1/file.txt', size: 512 },
+        user: { _id: 'dev1' },
+      };
+      const res = makeRes();
+
+      await controller.confirmUpload(req, res);
+
+      expect(Project.updateOne).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ provider: 'external' }));
+    });
+  });
+});
