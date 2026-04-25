@@ -73,10 +73,10 @@ For the newer upload flow, file bytes are uploaded directly from the browser to 
 
 Typical flow:
 
-1. Call backend `upload-request` endpoint with `filename`, `contentType`, and `size`.
+1. Call backend `POST /api/storage/upload-request` with `filename`, `contentType`, and `size`.
 2. Receive `signedUrl` and `filePath`.
 3. Browser uploads file to `signedUrl` using `PUT`.
-4. Call backend `upload-confirm` endpoint to verify file existence and charge quota.
+4. Call backend `POST /api/storage/upload-confirm` to verify file existence and charge quota.
 
 This avoids proxying file bytes through Node.js and keeps server memory usage predictable.
 
@@ -95,5 +95,7 @@ Required headers should include at least:
 
 - `content-type`
 - `content-length`
+
+Browser `PUT` requests to `signedUrl` should send the file body and include the correct `Content-Type`, and `Content-Length` when your client/runtime allows explicitly setting it.
 
 If preflight CORS is missing or restrictive, browser uploads will fail even when the signed URL is valid.

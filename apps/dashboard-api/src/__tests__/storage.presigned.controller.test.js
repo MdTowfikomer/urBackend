@@ -9,6 +9,14 @@ jest.mock('crypto', () => {
 });
 
 jest.mock('@urbackend/common', () => {
+  class AppError extends Error {
+    constructor(statusCode, message) {
+      super(message);
+      this.statusCode = statusCode;
+      this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
+    }
+  }
+
   const mockStorageFrom = {
     getPublicUrl: jest.fn(),
     remove: jest.fn(),
@@ -30,6 +38,7 @@ jest.mock('@urbackend/common', () => {
     verifyUploadedFile: jest.fn(),
     isProjectStorageExternal: jest.fn(),
     getBucket: jest.fn(() => 'dev-files'),
+    AppError,
     __mockStorageFrom: mockStorageFrom,
   };
 });
@@ -50,6 +59,8 @@ const makeRes = () => {
   res.json.mockReturnValue(res);
   return res;
 };
+
+const makeNext = () => jest.fn();
 
 const makeProject = (overrides = {}) => ({
   _id: 'project1',
@@ -80,13 +91,14 @@ describe('dashboard project.controller presigned upload', () => {
         user: { _id: 'dev1' },
       };
       const res = makeRes();
+      const next = makeNext();
 
-      await controller.requestUpload(req, res);
+      await controller.requestUpload(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        error: 'filename, contentType, and size are required.',
-      });
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({
+        statusCode: 400,
+        message: 'filename, contentType, and size are required.',
+      }));
     });
 
     test('returns 403 when internal quota is exceeded', async () => {
@@ -99,11 +111,14 @@ describe('dashboard project.controller presigned upload', () => {
         user: { _id: 'dev1' },
       };
       const res = makeRes();
+      const next = makeNext();
 
-      await controller.requestUpload(req, res);
+      await controller.requestUpload(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith({ error: 'Internal storage limit exceeded.' });
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({
+        statusCode: 403,
+        message: 'Internal storage limit exceeded.',
+      }));
     });
 
     test('returns signed URL payload on success', async () => {
@@ -120,8 +135,9 @@ describe('dashboard project.controller presigned upload', () => {
         user: { _id: 'dev1' },
       };
       const res = makeRes();
+      const next = makeNext();
 
-      await controller.requestUpload(req, res);
+      await controller.requestUpload(req, res, next);
 
       expect(getPresignedUploadUrl).toHaveBeenCalledWith(
         expect.objectContaining({ _id: 'project1' }),
@@ -131,10 +147,15 @@ describe('dashboard project.controller presigned upload', () => {
       );
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
-        signedUrl: 'https://signed.example/upload',
-        token: 't1',
-        filePath: 'project1/mocked-uuid_my_file.txt',
+        success: true,
+        data: {
+          signedUrl: 'https://signed.example/upload',
+          token: 't1',
+          filePath: 'project1/mocked-uuid_my_file.txt',
+        },
+        message: 'Upload URL generated successfully.',
       });
+      expect(next).not.toHaveBeenCalled();
     });
   });
 
@@ -149,11 +170,14 @@ describe('dashboard project.controller presigned upload', () => {
         user: { _id: 'dev1' },
       };
       const res = makeRes();
+      const next = makeNext();
 
-      await controller.confirmUpload(req, res);
+      await controller.confirmUpload(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith({ error: 'Access denied.' });
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({
+        statusCode: 403,
+        message: 'Access denied.',
+      }));
     });
 
     test('returns 409 when uploaded file is not visible yet', async () => {
@@ -168,15 +192,15 @@ describe('dashboard project.controller presigned upload', () => {
         user: { _id: 'dev1' },
       };
       const res = makeRes();
+      const next = makeNext();
 
-      await controller.confirmUpload(req, res);
+      await controller.confirmUpload(req, res, next);
 
       expect(mockStorageFrom.remove).toHaveBeenCalledWith(['project1/file.txt']);
-      expect(res.status).toHaveBeenCalledWith(409);
-      expect(res.json).toHaveBeenCalledWith({
-        error: 'UPLOAD_NOT_READY',
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({
+        statusCode: 409,
         message: 'Uploaded file is not visible yet. Please retry confirmation.',
-      });
+      }));
     });
 
     test('returns 400 when declared size mismatches actual size', async () => {
@@ -191,13 +215,14 @@ describe('dashboard project.controller presigned upload', () => {
         user: { _id: 'dev1' },
       };
       const res = makeRes();
+      const next = makeNext();
 
-      await controller.confirmUpload(req, res);
+      await controller.confirmUpload(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        error: 'Declared file size does not match uploaded file size.',
-      });
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({
+        statusCode: 400,
+        message: 'Declared file size does not match uploaded file size.',
+      }));
       expect(mockStorageFrom.remove).toHaveBeenCalledWith(['project1/file.txt']);
     });
 
@@ -214,8 +239,9 @@ describe('dashboard project.controller presigned upload', () => {
         user: { _id: 'dev1' },
       };
       const res = makeRes();
+      const next = makeNext();
 
-      await controller.confirmUpload(req, res);
+      await controller.confirmUpload(req, res, next);
 
       expect(Project.updateOne).toHaveBeenCalledWith(
         {
@@ -228,18 +254,24 @@ describe('dashboard project.controller presigned upload', () => {
         { $inc: { storageUsed: 1024 } },
       );
       expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-        message: 'Upload confirmed',
-        path: 'project1/file.txt',
-        provider: 'internal',
-      }));
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: {
+          message: 'Upload confirmed',
+          path: 'project1/file.txt',
+          provider: 'internal',
+          url: 'https://cdn.example/p/project1/file.txt',
+        },
+        message: 'Upload confirmed.',
+      });
+      expect(next).not.toHaveBeenCalled();
     });
 
     test('skips quota charge for external storage', async () => {
       mockFindOneSelect(makeProject({ resources: { storage: { isExternal: true } } }));
       isProjectStorageExternal.mockReturnValue(true);
       verifyUploadedFile.mockResolvedValue(512);
-      mockStorageFrom.getPublicUrl.mockReturnValue({ data: { publicUrl: null, error: 'No public host' } });
+      mockStorageFrom.getPublicUrl.mockReturnValue({ data: { publicUrl: null } });
 
       const req = {
         params: { projectId: 'project1' },
@@ -247,12 +279,24 @@ describe('dashboard project.controller presigned upload', () => {
         user: { _id: 'dev1' },
       };
       const res = makeRes();
+      const next = makeNext();
 
-      await controller.confirmUpload(req, res);
+      await controller.confirmUpload(req, res, next);
 
       expect(Project.updateOne).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ provider: 'external' }));
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: {
+          message: 'Upload confirmed',
+          path: 'project1/file.txt',
+          provider: 'external',
+          url: null,
+          warning: 'Upload confirmed, but a public URL is unavailable.',
+        },
+        message: 'Upload confirmed.',
+      });
+      expect(next).not.toHaveBeenCalled();
     });
   });
 });
