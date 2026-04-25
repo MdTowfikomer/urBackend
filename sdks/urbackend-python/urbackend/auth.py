@@ -391,28 +391,35 @@ class AuthModule:
         api_key = self._http._api_key
         return f"{base}/api/userAuth/social/{provider}/start?key={api_key}"
 
-    def social_exchange(self, rt_code: str, provider: str) -> Dict[str, Any]:
-        """Exchange an OAuth ``rtCode`` for urBackend tokens.
+    def social_exchange(self, rt_code: str, token: str) -> Dict[str, Any]:
+        """Exchange an OAuth ``rtCode`` + one-time ``token`` for a urBackend refresh token.
+
+        Both ``rtCode`` and ``token`` are returned as query parameters on the
+        OAuth callback URL (``<siteUrl>/auth/callback?rtCode=...&token=...``).
 
         Args:
-            rt_code: The ``rtCode`` query param from the OAuth callback URL.
-            provider: ``"github"`` or ``"google"``.
+            rt_code: The ``rtCode`` query parameter from the OAuth callback URL.
+            token: The one-time security ``token`` query parameter from the callback URL.
 
         Returns:
-            Dict with ``accessToken`` (and optionally ``refreshToken``).
+            Dict with ``refreshToken`` that can be used with :meth:`refresh_token`.
 
         Raises:
-            AuthError: ``rtCode`` invalid or expired.
+            AuthError: ``rtCode`` or ``token`` invalid or expired.
 
         Example:
+            >>> # In a Django callback view:
             >>> rt_code = request.GET.get("rtCode")
-            >>> session = client.auth.social_exchange(rt_code, "github")
-            >>> client.auth.set_token(session["accessToken"])
+            >>> token   = request.GET.get("token")
+            >>> session = client.auth.social_exchange(rt_code, token)
+            >>> # Now call refresh_token to get an accessToken:
+            >>> new_session = client.auth.refresh_token(session["refreshToken"])
+            >>> client.auth.set_token(new_session["accessToken"])
         """
         return self._http.request(
             "POST",
             "/api/userAuth/social/exchange",
-            body={"rtCode": rt_code, "provider": provider},
+            body={"rtCode": rt_code, "token": token},
         )
 
     # ------------------------------------------------------------------

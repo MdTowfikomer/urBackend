@@ -145,10 +145,15 @@ server_client.mail.send(
 url = client.auth.social_start_url("github")   # or "google"
 # In Django: return redirect(url)
 
-# 2. After the user returns to your callback URL, exchange the rtCode
+# 2. After the user returns to <siteUrl>/auth/callback?rtCode=...&token=...
+#    exchange BOTH the rtCode and the one-time token (backend requires both)
 rt_code = request.GET.get("rtCode")
-session = client.auth.social_exchange(rt_code, "github")
-client.auth.set_token(session["accessToken"])
+token   = request.GET.get("token")
+session = client.auth.social_exchange(rt_code, token)
+
+# 3. Use the returned refreshToken to get an accessToken
+new_session = client.auth.refresh_token(session["refreshToken"])
+client.auth.set_token(new_session["accessToken"])
 ```
 
 ---

@@ -132,15 +132,15 @@ class TestSocialAuth:
         rsps_lib.add(
             rsps_lib.POST,
             f"{BASE}/api/userAuth/social/exchange",
-            json={"success": True, "data": {"accessToken": "social_tok"}, "message": ""},
+            json={"success": True, "data": {"refreshToken": "rt_abc"}, "message": ""},
             status=200,
         )
         import json
-        result = auth.social_exchange("rt_code_abc", "github")
+        result = auth.social_exchange("rt_code_abc", "one_time_tok")
         body = json.loads(rsps_lib.calls[0].request.body)
         assert body["rtCode"] == "rt_code_abc"
-        assert body["provider"] == "github"
-        assert result["accessToken"] == "social_tok"
+        assert body["token"] == "one_time_tok"
+        assert result["refreshToken"] == "rt_abc"
 
 
 class TestPasswordReset:

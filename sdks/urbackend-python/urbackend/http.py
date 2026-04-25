@@ -9,9 +9,8 @@ non-2xx status codes to the appropriate SDK exception.
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 import requests
 
