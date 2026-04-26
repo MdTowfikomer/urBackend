@@ -45,9 +45,8 @@ Documentation  = "https://docs.ub.bitbros.in"
 Repository     = "https://github.com/geturbackend/urBackend"
 "Bug Tracker"  = "https://github.com/geturbackend/urBackend/issues"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["urbackend*"]
+[tool.setuptools]
+packages = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

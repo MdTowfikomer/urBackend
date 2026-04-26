@@ -94,24 +94,24 @@ class UrBackendHTTP:
 
     Args:
         api_key (str): The project's publishable or secret API key.
-        base_url (str): Root URL of the urBackend public API.
+        base (str): Root URL of the urBackend public API.
         extra_headers (Optional[Dict[str, str]]): Additional headers merged
             into every request.
 
     Example:
         >>> http = UrBackendHTTP(api_key="pk_live_xxx",
-        ...                      base_url="https://api.ub.bitbros.in")
+        ...                      base="https://api.ub.bitbros.in")
         >>> data = http.request("GET", "/api/data/products")
     """
 
     def __init__(
         self,
         api_key: str,
-        base_url: str,
+        base: str,
         extra_headers: Optional[Dict[str, str]] = None,
     ) -> None:
         self._api_key = api_key
-        self._base_url = base_url.rstrip("/")
+        self._base = base.rstrip("/")
         self._extra_headers: Dict[str, str] = extra_headers or {}
         self._session = requests.Session()
 
@@ -120,8 +120,8 @@ class UrBackendHTTP:
         return self._api_key
 
     @property
-    def base_url(self) -> str:
-        return self._base_url
+    def base(self) -> str:
+        return self._base
 
     # ------------------------------------------------------------------
     # Public interface
@@ -149,7 +149,7 @@ class UrBackendHTTP:
 
         Args:
             method: HTTP verb (``"GET"``, ``"POST"``, ``"PUT"``, etc.).
-            path: API path relative to ``base_url`` (e.g. ``"/api/data/posts"``).
+            path: API path relative to ``base`` (e.g. ``"/api/data/posts"``).
             token: Optional Bearer token. Adds ``Authorization: Bearer <token>``
                 when supplied.
             body: Request payload. Serialised as JSON unless ``files`` is set.
@@ -170,7 +170,7 @@ class UrBackendHTTP:
             StorageError: Storage endpoint error.
             UrBackendError: Any other non-2xx response or network failure.
         """
-        url = f"{self._base_url}{path}"
+        url = f"{self._base}{path}"
 
         headers: Dict[str, str] = {
             "x-api-key": self._api_key,

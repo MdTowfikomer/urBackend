@@ -3,21 +3,21 @@
 import pytest
 import responses as rsps_lib
 
-from urbackend.exceptions import (
+from src.exceptions import (
     AuthError,
     NotFoundError,
     RateLimitError,
     UrBackendError,
     ValidationError,
 )
-from urbackend.http import UrBackendHTTP
+from src.http import UrBackendHTTP
 
 BASE = "https://api.ub.bitbros.in"
 
 
 @pytest.fixture
 def http():
-    return UrBackendHTTP(api_key="pk_live_test", base_url=BASE)
+    return UrBackendHTTP(api_key="pk_live_test", base=BASE)
 
 
 class TestRequestSuccess:

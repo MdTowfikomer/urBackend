@@ -25,7 +25,7 @@ from .http import UrBackendHTTP
 from .mail import MailModule
 from .storage import StorageModule
 
-_DEFAULT_BASE_URL = "https://api.ub.bitbros.in"
+_DEFAULT_BASE = "https://api.ub.bitbros.in"
 
 
 class UrBackendClient:
@@ -39,7 +39,7 @@ class UrBackendClient:
         api_key (str): Project API key — use the publishable key
             (``pk_live_...``) for client-facing code and the secret key
             (``sk_live_...``) for server-side-only operations (mail, admin).
-        base_url (str): Base URL of the urBackend public API.
+        base (str): Base URL of the urBackend public API.
             Defaults to ``"https://api.ub.bitbros.in"``.
         extra_headers (Optional[Dict[str, str]]): Additional HTTP headers
             merged into every request.
@@ -49,7 +49,7 @@ class UrBackendClient:
 
     Example — Django / Flask server::
 
-        from urbackend import UrBackendClient
+        from src import UrBackendClient
 
         client = UrBackendClient(api_key="pk_live_YOUR_KEY")
 
@@ -100,15 +100,16 @@ class UrBackendClient:
     def __init__(
         self,
         api_key: str,
-        base_url: str = _DEFAULT_BASE_URL,
+        base: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
     ) -> None:
         self._validate_api_key(api_key)
 
+        base = base or _DEFAULT_BASE
         self._extra_headers = extra_headers
         self._http = UrBackendHTTP(
             api_key=api_key,
-            base_url=base_url,
+            base=base,
             extra_headers=self._extra_headers,
         )
 
@@ -173,7 +174,7 @@ class UrBackendClient:
     def connect(
         self,
         api_key: str,
-        base_url: str = _DEFAULT_BASE_URL,
+        base: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
     ) -> "UrBackendClient":
         """Re-initialise the client with a new API key / base URL.
@@ -183,7 +184,7 @@ class UrBackendClient:
 
         Args:
             api_key: New API key.
-            base_url: New base URL.
+            base: New base URL.
 
         Returns:
             ``self`` for chaining.
@@ -197,7 +198,7 @@ class UrBackendClient:
         # Replace the shared HTTP session
         self._http.close()
         merged = extra_headers if extra_headers is not None else self._extra_headers
-        self._http = UrBackendHTTP(api_key=api_key, base_url=base_url, extra_headers=merged)
+        self._http = UrBackendHTTP(api_key=api_key, base=base, extra_headers=merged)
         self._extra_headers = merged
         # Reset lazy modules — they'll be recreated with the new http on next access
         self._auth = None

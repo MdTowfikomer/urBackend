@@ -4,16 +4,16 @@ import json
 import pytest
 import responses as rsps_lib
 
-from urbackend.db import CollectionRef, DatabaseModule
-from urbackend.exceptions import AuthError, NotFoundError
-from urbackend.http import UrBackendHTTP
+from src.db import CollectionRef, DatabaseModule
+from src.exceptions import AuthError, NotFoundError
+from src.http import UrBackendHTTP
 
 BASE = "https://api.ub.bitbros.in"
 
 
 @pytest.fixture
 def http():
-    return UrBackendHTTP(api_key="pk_live_test", base_url=BASE)
+    return UrBackendHTTP(api_key="pk_live_test", base=BASE)
 
 
 @pytest.fixture

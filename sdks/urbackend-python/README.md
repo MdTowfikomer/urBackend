@@ -21,7 +21,7 @@ Requires Python ≥ 3.8 and [`requests`](https://pypi.org/project/requests/).
 ## Quick Start
 
 ```python
-from urbackend import UrBackendClient
+from src import UrBackendClient
 
 client = UrBackendClient(api_key="pk_live_YOUR_KEY")
 ```
@@ -179,7 +179,7 @@ client.auth.resend_verification_otp("alice@example.com")
 ## Error Handling
 
 ```python
-from urbackend import (
+from src import (
     UrBackendClient,
     AuthError,
     NotFoundError,
@@ -205,12 +205,12 @@ except ValidationError as e:
 
 ## API Reference
 
-### `UrBackendClient(api_key, base_url?, extra_headers?)`
+### `UrBackendClient(api_key, base?, extra_headers?)`
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
 | `api_key` | `str` | — | Publishable (`pk_live_...`) or Secret (`sk_live_...`) key |
-| `base_url` | `str` | `https://api.ub.bitbros.in` | Override for self-hosted instances |
+| `base` | `str` | `https://api.ub.bitbros.in` | Override for self-hosted instances |
 | `extra_headers` | `dict` | `{}` | Headers merged into every request |
 
 ---
@@ -288,13 +288,13 @@ RLS is supported: pass the user's `accessToken` as `token=` to write operations.
 ```python
 # settings.py (Django)
 import os
-from urbackend import UrBackendClient
+from src import UrBackendClient
 
 urbackend = UrBackendClient(api_key=os.environ["URBACKEND_API_KEY"])
 
 # views.py
-from myapp.settings import urbackend
-from urbackend import NotFoundError
+from myapp.settings import src
+from src import NotFoundError
 
 def product_detail(request, product_id):
     try:

@@ -3,7 +3,7 @@ urbackend — Official Python SDK for urBackend.
 
 Quick start::
 
-    from urbackend import UrBackendClient
+    from src import UrBackendClient
 
     client = UrBackendClient(api_key="pk_live_YOUR_KEY")
 

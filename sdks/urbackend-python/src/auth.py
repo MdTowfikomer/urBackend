@@ -391,7 +391,7 @@ class AuthModule:
             >>> url = client.auth.social_start_url("github")
             >>> return redirect(url)   # Django redirect
         """
-        base = self._http.base_url
+        base = self._http.base
         api_key = self._http.api_key
         if api_key.startswith("sk_live_"):
             raise ValueError(
