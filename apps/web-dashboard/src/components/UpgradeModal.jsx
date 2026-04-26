@@ -24,7 +24,7 @@ const PRO_FEATURES = [
     'Custom HTML email templates',
     'BYOK — own API keys',
     'Analytics Pro',
-    'AI integrations (OpenAI, Groq)',
+    'AI integrations (OpenAI, Groq) Coming in May',
     'Priority support',
 ];
 
