@@ -185,7 +185,14 @@ async function findDuplicates(Model, fieldKey, isRequired) {
 async function createUniqueIndexes(Model, fields = []) {
   const createdIndexes = [];
 
-  const existingIndexes = await Model.collection.indexes();
+  let existingIndexes = [];
+  try {
+    existingIndexes = await Model.collection.indexes();
+  } catch (err) {
+    if (err.code !== 26 && !/ns does not exist/i.test(err.message)) {
+      throw err;
+    }
+  }
   const existingIndexNames = new Set(existingIndexes.map((idx) => idx.name));
 
   try {
