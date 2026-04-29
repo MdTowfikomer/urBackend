@@ -44,6 +44,7 @@ export class DatabaseModule {
    * @template T - The document type (extends DocumentData)
    * @param {string} collection - Name of the collection to query
    * @param {QueryParams} [params={}] - Optional query parameters for filtering, sorting, pagination
+   * @param {string} [token] - Optional authentication token (required for private-mode reads with publishable keys)
    * @returns {Promise<T[]>} Promise resolving to an array of documents (empty array if none found)
    * 
    * @throws {Error} If collection name is invalid
@@ -70,12 +71,26 @@ export class DatabaseModule {
    *   expand: ['profile']
    * });
    */
-  public async getAll<T extends DocumentData>(collection: string, params: QueryParams = {}): Promise<T[]> {
+  public async getAll<T extends DocumentData>(
+    collection: string,
+    params: QueryParams = {},
+    token?: string
+  ): Promise<T[]> {
     const queryString = this.buildQueryString(params);
     const path = `/api/data/${collection}${queryString}`;
     
     try {
-      return await this.client.request<T[]>('GET', path);
+      const result = await this.client.request<T[] | { items?: T[] }>('GET', path, { token });
+
+      if (Array.isArray(result)) {
+        return result;
+      }
+
+      if (result && typeof result === 'object' && Array.isArray(result.items)) {
+        return result.items;
+      }
+
+      return [] as T[];
     } catch (e) {
       if (e instanceof NotFoundError) {
         return [] as T[];
@@ -89,6 +104,7 @@ export class DatabaseModule {
    * 
    * @param {string} collection - Name of the collection to count
    * @param {Omit<QueryParams, 'count'>} [params={}] - Optional filter parameters
+   * @param {string} [token] - Optional authentication token (required for private-mode reads with publishable keys)
    * @returns {Promise<number>} Promise resolving to the total count of matching documents
    * 
    * @throws {Error} If collection name is invalid
@@ -112,10 +128,14 @@ export class DatabaseModule {
    * });
    * const totalPages = Math.ceil(total / 10);
    */
-  public async count(collection: string, params: Omit<QueryParams, 'count'> = {}): Promise<number> {
+  public async count(
+    collection: string,
+    params: Omit<QueryParams, 'count'> = {},
+    token?: string
+  ): Promise<number> {
     const queryString = this.buildQueryString({ ...params, count: 'true' });
     const path = `/api/data/${collection}${queryString}`;
-    const result = await this.client.request<{ count: number }>('GET', path);
+    const result = await this.client.request<{ count: number }>('GET', path, { token });
     return result.count;
   }
 
@@ -128,6 +148,7 @@ export class DatabaseModule {
    * @param {Object} [options={}] - Optional parameters
    * @param {string|string[]} [options.populate] - Fields to populate with related data
    * @param {string|string[]} [options.expand] - Fields to expand with nested data
+   * @param {string} [token] - Optional authentication token (required for private-mode reads with publishable keys)
    * @returns {Promise<T>} Promise resolving to the document
    * 
    * @throws {NotFoundError} If document with given ID does not exist
@@ -158,10 +179,11 @@ export class DatabaseModule {
   public async getOne<T extends DocumentData>(
     collection: string, 
     id: string, 
-    options: { populate?: string | string[]; expand?: string | string[] } = {}
+    options: { populate?: string | string[]; expand?: string | string[] } = {},
+    token?: string
   ): Promise<T> {
     const queryString = this.buildQueryString(options);
-    return this.client.request<T>('GET', `/api/data/${collection}/${id}${queryString}`);
+    return this.client.request<T>('GET', `/api/data/${collection}/${id}${queryString}`, { token });
   }
 
   /**

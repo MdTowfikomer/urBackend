@@ -3,6 +3,18 @@ title: Changelog
 description: What's new in urBackend — new features, improvements, and fixes.
 ---
 
+<Update label="2026-04-30" description="SDK patch release" tags={["Improvement", "Fix"]}>
+## Improvements
+
+**SDK v0.4.1** — Updated JavaScript/TypeScript SDK docs and signatures to support token-aware read flows in private RLS mode. `getAll`, `getOne`, and `count` now accept an optional `token` parameter so publishable-key clients can perform authenticated private reads. [View SDK docs](/sdk/database)
+
+## Bug fixes
+
+- Fixed JS SDK private-RLS read compatibility by forwarding Bearer tokens on `getAll`, `getOne`, and `count`
+- Fixed `getAll` response handling to correctly unwrap `{ items, total, page, limit }`
+- Updated SDK guidance to clarify `public-read` vs `private` token requirements
+</Update>
+
 <Update label="2026-04-27" description="Week of April 21–27" tags={["Feature", "Improvement", "Fix"]}>
 ## New features
 

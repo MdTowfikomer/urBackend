@@ -18,7 +18,7 @@ test('getAll returns array of typed documents', async () => {
     vi.fn().mockResolvedValue({
       ok: true,
       headers: new Headers({ 'content-type': 'application/json' }),
-      json: () => Promise.resolve({ success: true, data: mockData }),
+      json: () => Promise.resolve({ success: true, data: { items: mockData, total: 2, page: 1, limit: 50 } }),
     }),
   );
 
@@ -30,7 +30,7 @@ test('getAll with query params builds correct query string', async () => {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
     headers: new Headers({ 'content-type': 'application/json' }),
-    json: () => Promise.resolve({ success: true, data: [] }),
+    json: () => Promise.resolve({ success: true, data: { items: [], total: 0, page: 1, limit: 10 } }),
   });
   vi.stubGlobal('fetch', fetchMock);
 
@@ -50,6 +50,27 @@ test('getAll with query params builds correct query string', async () => {
   expect(searchParams.get('sort')).toBe('price:asc');
   expect(searchParams.get('populate')).toBe('category');
   expect(searchParams.get('price_gt')).toBe('100');
+});
+
+test('getAll forwards Authorization header when token is provided', async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: () => Promise.resolve({ success: true, data: { items: [] } }),
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  await client.db.getAll('products', {}, 'user-token');
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining('/api/data/products'),
+    expect.objectContaining({
+      method: 'GET',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer user-token',
+      }),
+    }),
+  );
 });
 
 test('insert returns created document and handles optional token', async () => {
@@ -111,6 +132,27 @@ test('getOne with populate builds correct query string', async () => {
   expect(url).toContain('?populate=category');
 });
 
+test('getOne forwards Authorization header when token is provided', async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: () => Promise.resolve({ success: true, data: { _id: '1' } }),
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  await client.db.getOne('products', '1', {}, 'user-token');
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining('/api/data/products/1'),
+    expect.objectContaining({
+      method: 'GET',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer user-token',
+      }),
+    }),
+  );
+});
+
 test('delete returns { deleted: true } and handles token', async () => {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
@@ -164,6 +206,27 @@ test('count with filters builds correct query string', async () => {
   const searchParams = new URL(url).searchParams;
   expect(searchParams.get('count')).toBe('true');
   expect(searchParams.get('status')).toBe('active');
+});
+
+test('count forwards Authorization header when token is provided', async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: () => Promise.resolve({ success: true, data: { count: 7 } }),
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  await client.db.count('products', { filter: { status: 'active' } }, 'user-token');
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining('/api/data/products'),
+    expect.objectContaining({
+      method: 'GET',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer user-token',
+      }),
+    }),
+  );
 });
 
 test('count returns 0 when no documents match', async () => {

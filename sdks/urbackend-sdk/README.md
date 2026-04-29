@@ -57,12 +57,15 @@ await client.mail.send({
 ---
 
 ### Database (`client.db`)
-Support for **Row-Level Security (RLS)** is built-in. Pass the user's `accessToken` as the final parameter to write routes if RLS is enabled for the collection.
+Support for **Row-Level Security (RLS)** is built-in. Pass the user's `accessToken` where required:
+- `public-read`: required for writes with `pk_live`, optional for reads.
+- `private`: required for both reads and writes with `pk_live`.
 
 | Method | Params | Returns |
 |--------|--------|---------|
-| `getAll<T>` | `collection, params?` | `T[]` |
-| `getOne<T>` | `collection, id, options?` | `T` |
+| `getAll<T>` | `collection, params?, token?` | `T[]` |
+| `getOne<T>` | `collection, id, options?, token?` | `T` |
+| `count` | `collection, params?, token?` | `number` |
 | `insert<T>` | `collection, data, token?` | `T` |
 | `update<T>` | `collection, id, data, token?` | `T` (Full Replace) |
 | `patch<T>` | `collection, id, data, token?` | `T` (Partial Update) |

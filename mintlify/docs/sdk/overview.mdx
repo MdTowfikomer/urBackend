@@ -52,6 +52,9 @@ const products = await client.db.getAll('products', {
   sort: 'price:asc'
 });
 
+// In private RLS mode (with pk_live), pass token for reads too
+const myPrivateProducts = await client.db.getAll('products', { limit: 20 }, accessToken);
+
 // ⚠️ Server-side only — requires a secret key (sk_live_...).
 // Do not use this initialization in browser/client code.
 const serverClient = urBackend({ apiKey: process.env.URBACKEND_SECRET_KEY });
@@ -121,7 +124,9 @@ try {
 ## API key security
 
 <Warning>
-Use `pk_live_...` (publishable key) in frontend/browser code. It allows read operations by default, and write operations only if RLS is enabled.
+Use `pk_live_...` (publishable key) in frontend/browser code.
+- In `public-read`, reads work without a user token; writes require user token when RLS is enabled.
+- In `private`, both reads and writes require a user token.
 
 Use `sk_live_...` (secret key) in server-side code only. It allows full CRUD access. Never expose it in client-side bundles or public repositories.
 </Warning>

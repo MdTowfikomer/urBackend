@@ -10,7 +10,9 @@ Methods that return documents accept a generic type parameter `T` (extending `Do
 
 ## Row-Level Security (RLS)
 
-If a collection has RLS enabled, you must provide the user's `accessToken` to perform write operations (`insert`, `update`, `patch`, `delete`).
+If a collection has RLS enabled, token requirements depend on mode:
+- `public-read`: token is required for writes (`insert`, `update`, `patch`, `delete`), optional for reads.
+- `private`: token is required for both reads and writes when using a publishable key (`pk_live_...`).
 
 Example pattern:
 ```typescript
@@ -25,7 +27,7 @@ await client.db.insert('posts', { content: 'Hello' }, accessToken);
 Fetch documents from a collection with optional filtering, sorting, and pagination.
 
 ```typescript
-getAll<T extends DocumentData>(collection: string, params?: QueryParams): Promise<T[]>
+getAll<T extends DocumentData>(collection: string, params?: QueryParams, token?: string): Promise<T[]>
 ```
 
 **Query Parameters (`params`)**
@@ -46,6 +48,9 @@ const products = await client.db.getAll<Product>('products', {
   sort: 'price:asc',
   limit: 20
 });
+
+// For private-mode reads with pk_live_..., pass the user token:
+const privateItems = await client.db.getAll<Product>('products', { limit: 10 }, accessToken);
 ```
 
 ---
@@ -55,7 +60,7 @@ const products = await client.db.getAll<Product>('products', {
 Fetch a single document by its ID.
 
 ```typescript
-getOne<T extends DocumentData>(collection: string, id: string, options?: { populate?: string | string[] }): Promise<T>
+getOne<T extends DocumentData>(collection: string, id: string, options?: { populate?: string | string[] }, token?: string): Promise<T>
 ```
 
 **Example**
@@ -63,6 +68,18 @@ getOne<T extends DocumentData>(collection: string, id: string, options?: { popul
 ```typescript
 const product = await client.db.getOne<Product>('products', 'id_123', { populate: 'vendor' });
 ```
+
+---
+
+## count
+
+Count documents in a collection.
+
+```typescript
+count(collection: string, params?: QueryParams, token?: string): Promise<number>
+```
+
+Use `token` for private-mode reads when using publishable keys.
 
 ---
 
