@@ -4,6 +4,54 @@ const { emailQueue } = require("@urbackend/common");
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
+const getValidHttpUrl = (raw) => {
+    if (!raw || typeof raw !== 'string') return null;
+    const candidate = raw.trim();
+    try {
+        const parsed = new URL(candidate);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            return parsed.toString();
+        }
+    } catch (_) {
+        return null;
+    }
+    return null;
+};
+
+const extractReleaseLinkFromContent = (content) => {
+    if (!content || typeof content !== 'string') return null;
+
+    // 1) Prefer markdown links whose label mentions changelog.
+    const changelogMdLink = content.match(/\[[^\]]*changelog[^\]]*\]\((https?:\/\/[^\s)]+)\)/i);
+    if (changelogMdLink?.[1]) {
+        const valid = getValidHttpUrl(changelogMdLink[1]);
+        if (valid) return valid;
+    }
+
+    // 2) Prefer explicit line style: Full changelog: https://...
+    const explicitLine = content.match(/full\s*changelog\s*:\s*(https?:\/\/[^\s<)]+)/i);
+    if (explicitLine?.[1]) {
+        const valid = getValidHttpUrl(explicitLine[1]);
+        if (valid) return valid;
+    }
+
+    // 3) Any markdown link.
+    const anyMdLink = content.match(/\[[^\]]+\]\((https?:\/\/[^\s)]+)\)/i);
+    if (anyMdLink?.[1]) {
+        const valid = getValidHttpUrl(anyMdLink[1]);
+        if (valid) return valid;
+    }
+
+    // 4) Any raw URL.
+    const anyRawUrl = content.match(/https?:\/\/[^\s<)]+/i);
+    if (anyRawUrl?.[0]) {
+        const valid = getValidHttpUrl(anyRawUrl[0]);
+        if (valid) return valid;
+    }
+
+    return null;
+};
+
 // GET FOR - ALL RELEASES
 exports.getAllReleases = async (req, res) => {
     try {
@@ -19,6 +67,7 @@ exports.getAllReleases = async (req, res) => {
 exports.createRelease = async (req, res) => {
     try {
         const { version, title, content } = req.body;
+        const changelogUrlFromContent = extractReleaseLinkFromContent(content);
 
         const dev = await Developer.findById(req.user._id);
         if (!dev || dev.email !== ADMIN_EMAIL) {
@@ -45,7 +94,8 @@ exports.createRelease = async (req, res) => {
                 email,
                 version,
                 title,
-                content
+                content,
+                changelogUrl: changelogUrlFromContent
             })
         ));
 

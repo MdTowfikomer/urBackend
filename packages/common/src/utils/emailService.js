@@ -70,9 +70,14 @@ const escapeHtml = (unsafe) => {
         .replace(/'/g, "&#039;");
 };
 
-async function sendReleaseEmail(email, { version, title, content }) {
+async function sendReleaseEmail(email, { version, title, content, changelogUrl }) {
     const sVersion = escapeHtml(version);
     const sTitle = escapeHtml(title);
+    const fallbackUrl = 'https://urbackend.bitbros.in/releases';
+    const ctaUrl = typeof changelogUrl === 'string' && /^https?:\/\//i.test(changelogUrl)
+        ? changelogUrl
+        : fallbackUrl;
+    const safeCtaUrl = escapeHtml(ctaUrl);
     
     // Convert markdown content to HTML using marked
     const sContentHtml = marked.parse(content);
@@ -104,7 +109,7 @@ async function sendReleaseEmail(email, { version, title, content }) {
                     <div class="badge">New Release ${sVersion}</div>
                     <h1>${sTitle}</h1>
                     <div class="content">${sContentHtml}</div>
-                    <a href="https://urbackend.bitbros.in/releases" class="cta">Read the full changelog</a>
+                    <a href="${safeCtaUrl}" class="cta">Read the full changelog</a>
                     <div class="footer">
                         <p>You're receiving this because you're a registered developer on urBackend.</p>
                         <p>© ${new Date().getFullYear()} urBackend Inc. • Built with passion for developers.</p>

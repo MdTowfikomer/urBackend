@@ -7,10 +7,10 @@ const emailQueue = new Queue('email-queue', { connection });
 
 // Initialize Worker with Rate Limiting
 const worker = new Worker('email-queue', async (job) => {
-    const { email, version, title, content } = job.data;
+    const { email, version, title, content, changelogUrl } = job.data;
     try {
         console.log(`[Queue] Processing Release email for: ${email}`);
-        await sendReleaseEmail(email, { version, title, content });
+        await sendReleaseEmail(email, { version, title, content, changelogUrl });
     } catch (error) {
         console.error(`[Queue] Failed to send email to ${email}:`, error);
         throw error;

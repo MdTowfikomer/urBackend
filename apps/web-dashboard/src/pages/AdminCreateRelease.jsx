@@ -6,6 +6,18 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Send, ArrowLeft, AlertCircle } from 'lucide-react';
 
+const DEFAULT_RELEASE_TEMPLATE = `## Highlights
+- 
+- 
+
+## Improvements
+- 
+
+## Fixes
+- 
+
+Full changelog: https://<paste-mintlify-changelog-link-here>`;
+
 export default function AdminCreateRelease() {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -13,7 +25,7 @@ export default function AdminCreateRelease() {
     const [formData, setFormData] = useState({
         version: '',
         title: '',
-        content: ''
+        content: DEFAULT_RELEASE_TEMPLATE
     });
 
     const isAdmin = user?.email === ADMIN_EMAIL;
@@ -97,7 +109,17 @@ export default function AdminCreateRelease() {
                 </div>
 
                 <div className="form-group">
-                    <label className="form-label">Content (Markdown style descriptions)</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="form-label" style={{ marginBottom: 0 }}>Content (Markdown style descriptions)</label>
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 10px', fontSize: '0.8rem' }}
+                            onClick={() => setFormData((prev) => ({ ...prev, content: DEFAULT_RELEASE_TEMPLATE }))}
+                        >
+                            Use Template
+                        </button>
+                    </div>
                     <textarea 
                         className="input-field" 
                         style={{ minHeight: '300px', resize: 'vertical', paddingTop: '12px' }}
@@ -106,6 +128,10 @@ export default function AdminCreateRelease() {
                         onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                         required
                     />
+                    <p style={{ marginTop: '8px', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+                        Email CTA link is auto-picked from your markdown content. Prefer adding a line like:
+                        {' '}<code>Full changelog: https://...</code>
+                    </p>
                 </div>
 
                 <button 
